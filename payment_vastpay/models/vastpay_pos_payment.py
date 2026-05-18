@@ -142,7 +142,7 @@ class VastPayPosPayment(models.Model):
 
         Method name confirmed against the installed point_of_sale source.
         """
-        if order.state in ('draft', 'invoiced'):
+        if order.state == 'draft':
             order.action_pos_order_paid()
             _logger.info("VastPay: POS order %s validated (paid).", order.name)
 

@@ -1,10 +1,10 @@
 {
     'name': 'VastPay POS Payment',
-    'version': '18.0.1.0.0',
+    'version': '19.0.1.0.0',
     'category': 'Point of Sale',
     'summary': 'Accept POS payments via VastPay QR / PWA (SAR, Saudi Arabia)',
     'description': """
-VastPay POS Payment for Odoo 18
+VastPay POS Payment for Odoo 19
 ===============================
 
 Adds VastPay as a Point of Sale payment method for Saudi Arabia (SAR).

@@ -6,17 +6,17 @@ This repository follows the standard Odoo layout: the module lives in
 [`payment_vastpay/`](payment_vastpay/) and branches are named after the Odoo
 version series.
 
-| Branch | Odoo version | Status |
-|--------|--------------|--------|
-| `18.0` | Odoo 18      | Current |
-| `19.0` | Odoo 19      | Planned |
+| Branch | Odoo version | Status     |
+|--------|--------------|------------|
+| `19.0` | Odoo 19      | Current    |
+| `18.0` | Odoo 18      | Maintained |
 
 See [`payment_vastpay/README.md`](payment_vastpay/README.md) for module
 documentation, configuration, and the VastPay API reference.
 
 ## Local testing
 
-A Docker Compose stack (Postgres 16 + Odoo 18 + a cloudflared tunnel for
+A Docker Compose stack (Postgres 16 + Odoo 19 + a cloudflared tunnel for
 inbound webhooks) is included:
 
 ```bash

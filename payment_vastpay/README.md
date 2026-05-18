@@ -1,10 +1,10 @@
-# VastPay POS Payment for Odoo 18
+# VastPay POS Payment for Odoo 19
 
-Accept **Point of Sale** payments in Odoo 18 through **VastPay** — the customer
+Accept **Point of Sale** payments in Odoo 19 through **VastPay** — the customer
 scans a QR code at the till, pays on the VastPay PWA / App Clip, and VastPay
 confirms the payment back to Odoo via webhook.
 
-- **Version:** 18.0.1.0.0
+- **Version:** 19.0.1.0.0
 - **License:** LGPL-3
 - **Category:** Point of Sale
 - **Author:** [Vast Group](https://vast-pay.com)
@@ -147,7 +147,7 @@ follows the provider flag rather than the global POS setting.
 A Docker Compose stack is included for local testing:
 
 ```bash
-docker compose up -d                 # Postgres 16 + Odoo 18 + cloudflared tunnel
+docker compose up -d                 # Postgres 16 + Odoo 19 + cloudflared tunnel
 docker compose run --rm odoo odoo -i payment_vastpay -d vastpay --stop-after-init
 docker compose logs tunnel           # public HTTPS URL for the webhook
 ```
@@ -159,6 +159,6 @@ webhook. The VastPay sandbox is available 10:00–22:00 on weekdays.
 
 ## Requirements
 
-- **Odoo 18.0** with **Point of Sale** and **Payment** apps.
+- **Odoo 19.0** with **Point of Sale** and **Payment** apps.
 - Python `requests` and `qrcode` (both ship with Odoo).
 - A **VastPay merchant account** — [vast-pay.com](https://vast-pay.com).

@@ -29,10 +29,10 @@ class PosPaymentMethod(models.Model):
     )
 
     @api.model
-    def _load_pos_data_fields(self, config_id):
+    def _load_pos_data_fields(self, config):
         # Expose the non-secret auto-validate flag (so the payment interface
         # can honour it) and the image (so the POS shows the brand logo).
-        params = super()._load_pos_data_fields(config_id)
+        params = super()._load_pos_data_fields(config)
         params += ['vastpay_auto_validate_order']
         if 'image' not in params:
             params += ['image']

@@ -1,5 +1,5 @@
 import { _t } from "@web/core/l10n/translation";
-import { PaymentInterface } from "@point_of_sale/app/payment/payment_interface";
+import { PaymentInterface } from "@point_of_sale/app/utils/payment/payment_interface";
 import { AlertDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { VastPayQRDialog } from "@payment_vastpay/app/vastpay_qr_dialog";
 
@@ -17,13 +17,13 @@ export class PaymentVastPay extends PaymentInterface {
         this._settled = true;
     }
 
-    send_payment_request(uuid) {
-        super.send_payment_request(uuid);
+    sendPaymentRequest(uuid) {
+        super.sendPaymentRequest(uuid);
         return this._vastpayPay();
     }
 
-    send_payment_cancel(order, uuid) {
-        super.send_payment_cancel(order, uuid);
+    sendPaymentCancel(order, uuid) {
+        super.sendPaymentCancel(order, uuid);
         this._vastpayCancel();
         return Promise.resolve(true);
     }
@@ -47,7 +47,7 @@ export class PaymentVastPay extends PaymentInterface {
     _line() {
         return (
             this.pos.getPendingPaymentLine("vastpay") ||
-            this.pos.get_order()?.get_selected_paymentline()
+            this.pos.getOrder()?.getSelectedPaymentline()
         );
     }
 
@@ -72,7 +72,7 @@ export class PaymentVastPay extends PaymentInterface {
     /**
      * Settle the in-flight payment exactly once: stop timers/dialog, set the
      * line status, optionally show an error, and resolve the promise returned
-     * by send_payment_request so the POS can clear its in-progress flag.
+     * by sendPaymentRequest so the POS can clear its in-progress flag.
      */
     _finish(success, errorMsg) {
         if (this._settled) {
@@ -81,7 +81,7 @@ export class PaymentVastPay extends PaymentInterface {
         this._settled = true;
         this._cleanup();
         const line = this._line();
-        line?.set_payment_status(success ? "done" : "retry");
+        line?.setPaymentStatus(success ? "done" : "retry");
         if (errorMsg) {
             this._showError(errorMsg);
         }
@@ -94,8 +94,8 @@ export class PaymentVastPay extends PaymentInterface {
 
 
     async _vastpayPay() {
-        const order = this.pos.get_order();
-        const line = order?.get_selected_paymentline();
+        const order = this.pos.getOrder();
+        const line = order?.getSelectedPaymentline();
         if (!line || line.amount <= 0) {
             this._showError(_t("Cannot process a non-positive amount."));
             return false;
@@ -111,19 +111,19 @@ export class PaymentVastPay extends PaymentInterface {
             });
         } catch {
             this._showError(_t("Could not reach Odoo. Please try again."));
-            line.set_payment_status("retry");
+            line.setPaymentStatus("retry");
             return false;
         }
 
         if (!resp || resp.error) {
             this._showError(resp?.error || _t("VastPay payment could not be started."));
-            line.set_payment_status("retry");
+            line.setPaymentStatus("retry");
             return false;
         }
 
         this.invoiceId = resp.invoice_id;
         line.transaction_id = resp.invoice_id;
-        line.set_payment_status("waitingCard");
+        line.setPaymentStatus("waitingCard");
 
         const amountLabel =
             this.env.utils?.formatCurrency?.(line.amount) ?? String(line.amount);
