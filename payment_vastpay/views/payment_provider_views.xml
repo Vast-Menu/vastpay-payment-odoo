@@ -15,10 +15,8 @@
             <group name="provider_credentials" position="inside">
                 <group invisible="code != 'vastpay'" name="vastpay_credentials">
                     <field name="vastpay_client_id"
-                           required="code == 'vastpay' and state != 'disabled'"
                            password="True"/>
                     <field name="vastpay_client_secret"
-                           required="code == 'vastpay' and state != 'disabled'"
                            password="True"/>
                     <field name="vastpay_webhook_registered" readonly="1"/>
                     <field name="vastpay_pwa_version"/>
