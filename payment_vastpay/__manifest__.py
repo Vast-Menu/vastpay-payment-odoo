@@ -9,21 +9,38 @@ VastPay POS Payment for Odoo 19
 
 Adds VastPay as a Point of Sale payment method for Saudi Arabia (SAR).
 
-Flow:
+How it works
+------------
+
 - Cashier selects VastPay on a POS order.
-- Odoo creates a VastPay invoice for the configured QR stand (Table ID) and
-  shows a QR code of the VastPay payment page on the payment screen.
+- Odoo creates a VastPay invoice for the configured QR stand (Table ID)
+  and shows a QR code of the VastPay payment page on the payment screen.
 - Customer scans the QR with their phone (VastPay PWA / App Clip) and pays.
 - VastPay calls back via webhook; Odoo re-fetches the invoice for the
   authoritative status/amount and records the payment.
-- The POS order is auto-validated (and optionally auto-invoiced) only when the
-  corresponding opt-in flag is enabled; otherwise the cashier validates the
-  order manually.
+- The POS order is auto-validated (and optionally auto-invoiced) only when
+  the corresponding opt-in flag is enabled; otherwise the cashier validates
+  the order manually.
 
-Supports Test/Live environments and a selectable PWA version (pwa / pwa-v2).
-Currency and country are locked to SAR / Saudi Arabia.
+Supports Test / Live environments and a selectable PWA version
+(pwa / pwa-v2). Currency and country are locked to SAR / Saudi Arabia.
 
-For API documentation visit: https://documenter.getpostman.com/view/50697047/2sBXiesu8J
+Installation
+------------
+
+- This is the Odoo 19 release (19.0.x). Use the 18.0 branch for Odoo 18.
+- Available on Odoo.sh and On Premise. Not available on Odoo Online (SaaS).
+- Get the module from the Odoo Apps store (v19) or clone the 19.0 branch.
+- Place the payment_vastpay folder in your Odoo addons path, or deploy the
+  repository on Odoo.sh.
+- Restart Odoo, enable Developer Mode, then Apps and Update Apps List.
+- Search for VastPay POS Payment and click Install. It installs the Point
+  of Sale and Payment apps automatically.
+- A VastPay QR POS payment method is created on install and added to your
+  Points of Sale. Finish setup in Payment Providers, VastPay.
+
+For API documentation visit
+https://documenter.getpostman.com/view/50697047/2sBXiesu8J
     """,
     'author': 'Vast Group',
     'maintainer': 'Vast Group',

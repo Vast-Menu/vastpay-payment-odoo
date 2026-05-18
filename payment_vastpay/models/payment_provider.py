@@ -28,14 +28,16 @@ class PaymentProvider(models.Model):
         selection_add=[('vastpay', 'VastPay')],
         ondelete={'vastpay': 'set default'},
     )
+    # Credentials are intentionally NOT required_if_provider: the provider
+    # ships in Test Mode without credentials. VastPay is simply hidden from
+    # the POS until both credentials are set (see pos.payment.method
+    # _load_pos_data_domain), instead of blocking the provider record.
     vastpay_client_id = fields.Char(
         string="Client ID",
-        required_if_provider='vastpay',
         groups='base.group_system',
     )
     vastpay_client_secret = fields.Char(
         string="Client Secret",
-        required_if_provider='vastpay',
         groups='base.group_system',
     )
     vastpay_access_token = fields.Char(

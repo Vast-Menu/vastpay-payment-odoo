@@ -68,14 +68,36 @@ branch). It is reused for every payment taken at that stand.
 
 ---
 
+## Installation
+
+> **Odoo version:** this is the **Odoo 19** release (`19.0.x`). Branches are
+> named after the Odoo series — use the `18.0` branch for Odoo 18.
+> Available on **Odoo.sh** and **On Premise**; **not** on Odoo Online (SaaS).
+
+1. Get the module:
+   - **Odoo Apps store** — download *VastPay POS Payment* for **v19**, or
+   - **Git** — clone this repository and check out the `19.0` branch.
+2. Place the `payment_vastpay/` folder in your Odoo **addons path** (or deploy
+   the repository on **Odoo.sh**).
+3. Restart Odoo, enable **Developer Mode**, then **Apps → Update Apps List**.
+4. Search for **VastPay POS Payment** and click **Install**. It automatically
+   installs the **Point of Sale** and **Payment** apps.
+5. On install a **VastPay QR** POS payment method is created and added to your
+   Points of Sale (no manual setup needed). Continue with **Configuration**.
+
+---
+
 ## Configuration
 
-1. Install **VastPay POS Payment**.
+1. Install **VastPay POS Payment**. The provider ships in **Test Mode** by
+   default (no credentials yet), so it is **hidden in the POS** until you
+   enter the API credentials below.
 2. **Accounting → Payment Providers → VastPay**:
    - Enter **Client ID** / **Client Secret** (system-group only, masked).
+     VastPay appears in the POS only once **both** are set.
    - Choose **PWA Version** (Default `pwa`, or `v2`/preview `pwa-v2`).
-   - Set state **Test Mode** (uses `*-staging.vast-pay.com`) or **Enabled**
-     (production).
+   - Keep state **Test Mode** (uses `*-staging.vast-pay.com`) or set
+     **Enabled** (production). **Disabled** hides VastPay in the POS.
    - Click **Test Connection**, then **Register Webhook** (registers
      `{web.base.url}/payment/vastpay/webhook`; ensure `web.base.url` is publicly
      reachable).
@@ -83,9 +105,11 @@ branch). It is reused for every payment taken at that stand.
      **Auto-invoice paid POS order** (both default OFF).
 3. **Point of Sale → Configuration → Point of Sale**: set the
    **VastPay Stand (Table ID)** for the register.
-4. **Point of Sale → Configuration → Payment Methods**: create a payment method
-   with **Integrate with = VastPay**, linked to the VastPay provider, and add it
-   to the POS.
+4. A **VastPay QR** payment method is created automatically on install and
+   added to your existing Points of Sale (new ones pick it up automatically).
+   Under **Point of Sale → Configuration → Payment Methods** you only need to
+   confirm it is linked to the VastPay provider and present on the register you
+   use.
 5. Open a register and take a VastPay payment.
 
 > Currency and country are locked to **SAR** / **Saudi Arabia**: a non-SAR POS

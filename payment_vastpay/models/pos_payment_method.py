@@ -6,6 +6,7 @@ import qrcode
 
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
+from odoo.osv import expression
 from odoo.tools import file_open
 
 _logger = logging.getLogger(__name__)
@@ -27,6 +28,33 @@ class PosPaymentMethod(models.Model):
         related='vastpay_provider_id.vastpay_auto_validate_order',
         readonly=True,
     )
+
+    @api.model
+    def _load_pos_data_domain(self, data, config):
+        # Don't load the VastPay method into the POS unless it can actually
+        # take payments: the linked provider must exist, not be Disabled,
+        # and have both API credentials set. Otherwise the cashier would
+        # see a VastPay option that fails on use.
+        domain = super()._load_pos_data_domain(data, config)
+        vastpay_methods = self.sudo().search(
+            [('use_payment_terminal', '=', 'vastpay')]
+        )
+        if not vastpay_methods:
+            return domain
+        fallback = self.env['payment.provider'].sudo().search(
+            [('code', '=', 'vastpay')], limit=1,
+        )
+        hidden_ids = []
+        for m in vastpay_methods:
+            provider = (m.vastpay_provider_id or fallback).sudo()
+            if (not provider
+                    or provider.state == 'disabled'
+                    or not provider.vastpay_client_id
+                    or not provider.vastpay_client_secret):
+                hidden_ids.append(m.id)
+        if hidden_ids:
+            domain = expression.AND([[('id', 'not in', hidden_ids)], domain])
+        return domain
 
     @api.model
     def _load_pos_data_fields(self, config):
