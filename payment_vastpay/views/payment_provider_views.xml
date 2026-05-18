@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="payment_provider_form_vastpay" model="ir.ui.view">
+        <field name="name">payment.provider.form.vastpay</field>
+        <field name="model">payment.provider</field>
+        <field name="inherit_id" ref="payment.payment_provider_form"/>
+        <field name="arch" type="xml">
+            <field name="available_currency_ids" position="attributes">
+                <attribute name="readonly">code == 'vastpay'</attribute>
+            </field>
+            <field name="available_country_ids" position="attributes">
+                <attribute name="readonly">code == 'vastpay'</attribute>
+            </field>
+            <group name="provider_credentials" position="inside">
+                <group invisible="code != 'vastpay'" name="vastpay_credentials">
+                    <field name="vastpay_client_id"
+                           required="code == 'vastpay' and state != 'disabled'"
+                           password="True"/>
+                    <field name="vastpay_client_secret"
+                           required="code == 'vastpay' and state != 'disabled'"
+                           password="True"/>
+                    <field name="vastpay_webhook_registered" readonly="1"/>
+                    <field name="vastpay_pwa_version"/>
+                    <field name="vastpay_auto_validate_order"/>
+                    <field name="vastpay_auto_invoice"
+                           invisible="not vastpay_auto_validate_order"/>
+                    <div class="o_row" colspan="2">
+                        <button name="action_vastpay_test_connection"
+                                string="Test Connection"
+                                type="object"
+                                class="btn-secondary"
+                                icon="fa-plug"/>
+                        <button name="action_vastpay_register_webhook"
+                                string="Register Webhook"
+                                type="object"
+                                class="btn-secondary"
+                                icon="fa-bell"/>
+                    </div>
+                </group>
+            </group>
+        </field>
+    </record>
+
+</odoo>

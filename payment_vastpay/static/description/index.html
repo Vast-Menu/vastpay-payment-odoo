@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <style>
+        body { font-family: 'Segoe UI', Roboto, sans-serif; color: #333; max-width: 900px; margin: 0 auto; padding: 20px; }
+        h2 { color: #5A4FF3; border-bottom: 2px solid #5A4FF3; padding-bottom: 8px; }
+        h3 { color: #555; }
+        .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }
+        .feature-card { background: #f7f7fe; border-radius: 8px; padding: 20px; border-left: 4px solid #5A4FF3; }
+        .feature-card h4 { margin-top: 0; color: #5A4FF3; }
+        .steps { counter-reset: step; }
+        .steps li { counter-increment: step; list-style: none; padding: 10px 0 10px 50px; position: relative; }
+        .steps li::before {
+            content: counter(step);
+            position: absolute; left: 0; top: 8px;
+            background: #5A4FF3; color: #fff; width: 32px; height: 32px;
+            border-radius: 50%; text-align: center; line-height: 32px; font-weight: bold;
+        }
+        .badge { display: inline-block; background: #5A4FF3; color: #fff; padding: 4px 12px; border-radius: 4px; font-size: 0.85em; margin: 2px; }
+    </style>
+</head>
+<body>
+
+<h2>VastPay POS Payment for Odoo 18</h2>
+<p>Accept <strong>Point of Sale</strong> payments with <strong>VastPay</strong>:
+the customer scans a QR code at the till, pays on the VastPay PWA / App Clip,
+and VastPay confirms the payment back to Odoo via webhook. No card data ever
+touches your Odoo server.</p>
+
+<p>
+    <span class="badge">Odoo 18 POS</span>
+    <span class="badge">QR + Webhook</span>
+    <span class="badge">SAR only</span>
+    <span class="badge">Saudi Arabia</span>
+</p>
+
+<h2>Features</h2>
+<div class="feature-grid">
+    <div class="feature-card">
+        <h4>POS QR Payment</h4>
+        <p>A QR code for the VastPay hosted page is shown on the POS payment
+        screen. The cashier never handles card data.</p>
+    </div>
+    <div class="feature-card">
+        <h4>Secure OAuth</h4>
+        <p>Two-step OAuth with client_id / client_secret, long-lived token and
+        automatic re-authentication.</p>
+    </div>
+    <div class="feature-card">
+        <h4>Trustworthy Webhooks</h4>
+        <p>The webhook is only a trigger — the invoice is re-fetched from
+        VastPay for the authoritative status and amount.</p>
+    </div>
+    <div class="feature-card">
+        <h4>You Control Closing</h4>
+        <p>By default the payment is recorded but the cashier validates the
+        order. Opt-in flags enable auto-validate and auto-invoice.</p>
+    </div>
+</div>
+
+<h2>Currency &amp; Availability</h2>
+<p>
+    <span class="badge">SAR — Saudi Riyal</span>
+    <span class="badge">Saudi Arabia</span>
+</p>
+<p>VastPay processes payments in <strong>SAR</strong> only. The provider is
+locked to SAR and Saudi Arabia in the UI and enforced by a model constraint.</p>
+
+<h2>How It Works</h2>
+<ol class="steps">
+    <li><strong>Cashier selects VastPay</strong> on a POS order.</li>
+    <li><strong>Invoice created on VastPay</strong> using the QR stand's Table ID configured on the Point of Sale.</li>
+    <li><strong>Customer scans the QR</strong> and pays on the VastPay PWA / App Clip.</li>
+    <li><strong>Webhook confirms</strong> — Odoo re-fetches the invoice and records the payment; the order closes only if you enabled the flag.</li>
+</ol>
+
+<h2>Configuration</h2>
+<ol class="steps">
+    <li>Accounting &rarr; Payment Providers &rarr; <strong>VastPay</strong>: enter Client ID / Secret, pick the PWA version, set Test or Enabled.</li>
+    <li>Click <strong>Test Connection</strong>, then <strong>Register Webhook</strong>.</li>
+    <li>Point of Sale &rarr; Configuration: set the <strong>VastPay Stand (Table ID)</strong> on the register.</li>
+    <li>Add a Payment Method with <strong>Integrate with = VastPay</strong> to the POS.</li>
+</ol>
+
+<h2>Requirements</h2>
+<ul>
+    <li>Odoo 18.0 — Point of Sale &amp; Payment apps</li>
+    <li>A VastPay merchant account (<a href="https://vast-pay.com" target="_blank">vast-pay.com</a>)</li>
+</ul>
+
+</body>
+</html>
