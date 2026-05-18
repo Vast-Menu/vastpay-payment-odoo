@@ -146,11 +146,14 @@ export class PaymentVastPay extends PaymentInterface {
     }
 
     async _poll() {
+        // Polling stops via _settled (set by _finish) when the payment
+        // resolves, is cancelled, or times out, and via the PaymentInterface
+        // close()/send_payment_cancel lifecycle when the cashier leaves the
+        // payment screen. We deliberately do NOT probe the current POS
+        // screen here: that internal API differs across Odoo versions
+        // (pos.mainScreen is unused in Odoo 19) and tripping it aborted the
+        // payment before the first status poll.
         if (this._settled) {
-            return;
-        }
-        if (this.pos.mainScreen?.component?.name !== "PaymentScreen") {
-            this._finish(false);
             return;
         }
         let resp;
