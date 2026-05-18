@@ -14,6 +14,12 @@ def _post_init_hook(env):
     provider = env['payment.provider'].search(
         [('code', '=', 'vastpay')], limit=1,
     )
+    # A bank journal so VastPay payments post to accounting like any other
+    # electronic POS method (mirrors how core creates the "Card" method).
+    bank_journal = env['account.journal'].search(
+        [('type', '=', 'bank'), ('company_id', '=', env.company.id)],
+        limit=1,
+    )
     PaymentMethod = env['pos.payment.method']
     method = PaymentMethod.search(
         [('use_payment_terminal', '=', 'vastpay')], limit=1,
@@ -24,8 +30,11 @@ def _post_init_hook(env):
             'payment_method_type': 'terminal',
             'use_payment_terminal': 'vastpay',
             'company_id': env.company.id,
+            'journal_id': bank_journal.id if bank_journal else False,
             'vastpay_provider_id': provider.id if provider else False,
         })
+    elif not method.journal_id and bank_journal:
+        method.journal_id = bank_journal.id
 
     configs = env['pos.config'].search(
         [('company_id', '=', method.company_id.id)],
