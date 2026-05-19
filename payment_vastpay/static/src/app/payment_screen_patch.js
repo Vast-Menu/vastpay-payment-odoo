@@ -4,7 +4,15 @@ import { patch } from "@web/core/utils/patch";
 patch(PaymentScreen.prototype, {
     setup() {
         super.setup(...arguments);
-        this._vastpayReconcileOrphanLines();
+        // Reconcile first (it may mark a line "done" if the customer paid
+        // the old-amount QR), THEN void anything still unpaid whose order
+        // changed underneath it. Voiding before reconcile resolves could
+        // cancel/delete a payment the customer actually completed.
+        this._vastpayReconcileOrphanLines().then(() => {
+            this.pos._vastpayVoidStaleLines(this.currentOrder, {
+                requireSnapshot: true,
+            });
+        });
     },
 
     /**
@@ -85,6 +93,37 @@ patch(PaymentScreen.prototype, {
         } catch {
             // best effort; never break the payment screen
         }
+    },
+
+    /**
+     * Deleting a VastPay payment line must release the invoice at VastPay,
+     * otherwise the customer could still pay a QR for an order line the
+     * cashier already removed. Native `deletePaymentLine` only sends a
+     * cancel for terminal-in-progress states (waiting/waitingCard/timeout);
+     * a VastPay line is commonly deleted from "retry"/"pending" (e.g. after
+     * a local cancel or an orphan reconcile), where native removes it
+     * silently. For those states we explicitly cancel the invoice first.
+     * A "done" (already paid) line is left untouched — that is a captured
+     * payment, not a cancellable invoice.
+     */
+    deletePaymentLine(uuid) {
+        const line = this.paymentLines.find((l) => l.uuid === uuid);
+        const pm = line?.payment_method_id;
+        if (pm?.use_payment_terminal === "vastpay" && line.transaction_id) {
+            const status = line.getPaymentStatus?.();
+            const nativeCancels = ["waiting", "waitingCard", "timeout"].includes(
+                status
+            );
+            if (!nativeCancels && !["waitingCancel", "done"].includes(status)) {
+                this.env.services.orm.silent
+                    .call("pos.payment.method", "vastpay_cancel_payment", [
+                        [pm.id],
+                        { invoice_id: line.transaction_id },
+                    ])
+                    .catch(() => {}); // best effort; still remove the line
+            }
+        }
+        return super.deletePaymentLine(...arguments);
     },
 
     /**

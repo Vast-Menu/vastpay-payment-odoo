@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!--
+      For a VastPay line, the QR sheet can be closed while the invoice is
+      still live (the customer can keep paying — it completes automatically
+      via the webhook/poll). Closing settles the line to "retry", whose
+      stock label "Transaction cancelled" is then misleading: nothing was
+      cancelled. Only deleting the line (the red ✕) cancels at VastPay.
+      Swap the label for VastPay lines only; other methods are untouched.
+    -->
+    <t t-inherit="point_of_sale.PaymentScreenPaymentLines" t-inherit-mode="extension">
+        <xpath expr="//t[contains(@t-elif, 'retry')]/div[hasclass('electronic_status')]" position="replace">
+            <div t-attf-class="electronic_status {{ line.payment_method_id.use_payment_terminal === 'vastpay' ? 'vastpay-payment-status' : '' }}">
+                <t t-if="line.payment_method_id.use_payment_terminal === 'vastpay'">
+                    Waiting for the customer to pay. The QR is still active —
+                    the payment is received automatically once it arrives.
+                    To cancel it at VastPay, delete this line.
+                </t>
+                <t t-else="">
+                    Transaction cancelled
+                </t>
+            </div>
+        </xpath>
+    </t>
+
+</templates>

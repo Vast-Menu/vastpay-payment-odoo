@@ -10,7 +10,7 @@ export class VastPayQRDialog extends Component {
         qrImage: String,
         amountLabel: String,
         paymentUrl: String,
-        onCancel: { type: Function, optional: true },
+        onClose: { type: Function, optional: true },
         onCheck: { type: Function, optional: true },
         showCheckButton: { type: Boolean, optional: true },
     };
@@ -19,8 +19,17 @@ export class VastPayQRDialog extends Component {
         this.state = useState({ checking: false, message: "" });
     }
 
-    cancel() {
-        this.props.onCancel?.();
+    /**
+     * Close the QR sheet WITHOUT cancelling the invoice at VastPay. The
+     * customer can still pay: the payment is settled locally (no server
+     * cancel) and the session-level bus listener / payment-screen reconcile
+     * complete the order automatically when the payment lands. Cancelling
+     * the payment at VastPay only happens when the cashier deletes the
+     * payment line (the red ✕). Used by both the header ✕ and the footer
+     * Close button.
+     */
+    closeOnly() {
+        this.props.onClose?.();
         this.props.close();
     }
 
