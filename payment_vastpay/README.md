@@ -82,7 +82,7 @@ branch). It is reused for every payment taken at that stand.
 3. Restart Odoo, enable **Developer Mode**, then **Apps → Update Apps List**.
 4. Search for **VastPay POS Payment** and click **Install**. It automatically
    installs the **Point of Sale** and **Payment** apps.
-5. On install a **VastPay QR** POS payment method is created and added to your
+5. On install a **VastPay** POS payment method is created and added to your
    Points of Sale (no manual setup needed). Continue with **Configuration**.
 
 ---
@@ -105,7 +105,7 @@ branch). It is reused for every payment taken at that stand.
      **Auto-invoice paid POS order** (both default OFF).
 3. **Point of Sale → Configuration → Point of Sale**: set the
    **VastPay Stand (Table ID)** for the register.
-4. A **VastPay QR** payment method is created automatically on install and
+4. A **VastPay** payment method is created automatically on install and
    added to your existing Points of Sale (new ones pick it up automatically).
    Under **Point of Sale → Configuration → Payment Methods** you only need to
    confirm it is linked to the VastPay provider and present on the register you

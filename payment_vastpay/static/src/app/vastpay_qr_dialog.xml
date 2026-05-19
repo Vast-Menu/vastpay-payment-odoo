@@ -11,7 +11,7 @@
             </t>
             <div class="d-flex flex-column align-items-center text-center gap-2 p-2">
                 <p class="mb-0">Scan the QR code to pay <strong t-esc="props.amountLabel"/></p>
-                <img t-att-src="props.qrImage" alt="VastPay QR"
+                <img t-att-src="props.qrImage" alt="VastPay"
                      style="width:260px;height:260px;"/>
                 <small class="text-muted">Waiting for payment confirmation…</small>
                 <a t-att-href="props.paymentUrl" target="_blank" class="small">

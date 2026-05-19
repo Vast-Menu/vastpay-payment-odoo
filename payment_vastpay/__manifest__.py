@@ -2,7 +2,7 @@
     'name': 'VastPay POS Payment',
     'version': '18.0.1.0.0',
     'category': 'Point of Sale',
-    'summary': 'Accept POS payments via VastPay QR / PWA (SAR, Saudi Arabia)',
+    'summary': 'Accept POS payments via VastPay (SAR, Saudi Arabia)',
     'description': """
 VastPay POS Payment for Odoo 18
 ===============================
@@ -36,7 +36,7 @@ Installation
 - Restart Odoo, enable Developer Mode, then Apps and Update Apps List.
 - Search for VastPay POS Payment and click Install. It installs the Point
   of Sale and Payment apps automatically.
-- A VastPay QR POS payment method is created on install and added to your
+- A VastPay POS payment method is created on install and added to your
   Points of Sale. Finish setup in Payment Providers, VastPay.
 
 For API documentation visit

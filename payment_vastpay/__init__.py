@@ -26,7 +26,7 @@ def _post_init_hook(env):
     )
     if not method:
         method = PaymentMethod.create({
-            'name': 'VastPay QR',
+            'name': 'VastPay',
             'payment_method_type': 'terminal',
             'use_payment_terminal': 'vastpay',
             'company_id': env.company.id,

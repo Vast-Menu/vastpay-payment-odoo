@@ -112,7 +112,7 @@ patch(PosStore.prototype, {
      * Single chokepoint for the in-order customer flow: the partner list
      * (customer button on the product/payment screen, deselect inside the
      * partner list) resolves through here, with `set_partner(false)` for
-     * removal. After super runs, void any pending VastPay QR set to
+     * removal. After super runs, void any pending VastPay payment set to
      * auto-invoice if the order is now partnerless — that QR can no longer
      * be invoiced once paid (see _vastpayVoidLinesNeedingPartner). The void
      * method self-guards on `get_partner()` being falsy, so this is a no-op
@@ -177,7 +177,7 @@ patch(PosStore.prototype, {
             order,
             stale,
             _t(
-                "The order changed, so the pending VastPay QR was cancelled. " +
+                "The order changed, so the pending VastPay payment was cancelled. " +
                     "Generate a new QR for the updated amount."
             )
         );
@@ -219,7 +219,7 @@ patch(PosStore.prototype, {
             order,
             orphan,
             _t(
-                "The customer was removed, so the pending VastPay QR was " +
+                "The customer was removed, so the pending VastPay payment was " +
                     "cancelled (this payment auto-invoices the order and needs " +
                     "a customer). Select a customer and generate a new QR."
             )
