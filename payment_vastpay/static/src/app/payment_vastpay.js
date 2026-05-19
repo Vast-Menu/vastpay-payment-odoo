@@ -3,7 +3,7 @@ import { PaymentInterface } from "@point_of_sale/app/payment/payment_interface";
 import { AlertDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { VastPayQRDialog } from "@payment_vastpay/app/vastpay_qr_dialog";
 
-const POLL_INTERVAL = 3000; // ms
+const POLL_INTERVAL = 60000; // ms (1 min)
 const PAYMENT_TIMEOUT = 300000; // ms (5 min)
 
 export class PaymentVastPay extends PaymentInterface {
