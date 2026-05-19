@@ -242,16 +242,45 @@ class PaymentProvider(models.Model):
         self.ensure_one()
         return self._vastpay_make_request('PATCH', f'/invoices/cancel/{order_id}')
 
+    @staticmethod
+    def _vastpay_response_enabled(result, default):
+        """Read the ``enabled`` flag VastPay returns for the webhook update.
+
+        The flag may be top-level or nested under ``data`` and may come back
+        as a real bool, an int, or a string ("true"/"1"). Falls back to
+        ``default`` when the API does not return the flag at all.
+        """
+        enabled = None
+        if isinstance(result, dict):
+            if 'enabled' in result:
+                enabled = result.get('enabled')
+            elif isinstance(result.get('data'), dict) and 'enabled' in result['data']:
+                enabled = result['data'].get('enabled')
+        if enabled is None:
+            return default
+        if isinstance(enabled, str):
+            return enabled.strip().lower() in ('1', 'true', 'yes', 'enabled')
+        return bool(enabled)
+
     def _vastpay_register_webhook(self, webhook_url):
-        """Register or update the webhook URL on VastPay."""
+        """Register, update or disable the webhook URL on VastPay.
+
+        Passing an empty ``webhook_url`` disables the webhook on VastPay.
+        The ``vastpay_webhook_registered`` flag follows the ``enabled``
+        status returned by VastPay (falling back to whether a URL was sent).
+        """
         self.ensure_one()
         result = self._vastpay_make_request(
             'PATCH',
             '/integrations/webhook/update',
             params={'webhook_url': webhook_url},
         )
-        self.vastpay_webhook_registered = True
-        _logger.info("VastPay: webhook registered at %s", webhook_url)
+        enabled = self._vastpay_response_enabled(result, default=bool(webhook_url))
+        self.vastpay_webhook_registered = enabled
+        if enabled:
+            _logger.info("VastPay: webhook registered at %s", webhook_url)
+        else:
+            _logger.info("VastPay: webhook disabled")
         return result
 
     # --- Provider actions ---
@@ -285,6 +314,23 @@ class PaymentProvider(models.Model):
                 'message': _("VastPay will send payment notifications to: %s") % webhook_url,
                 'type': 'success',
                 'sticky': False,
+                'next': {'type': 'ir.actions.act_window_close'},
+            },
+        }
+
+    def action_vastpay_disable_webhook(self):
+        """Disable the webhook on VastPay by sending an empty URL."""
+        self.ensure_one()
+        self._vastpay_register_webhook('')
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Webhook Disabled"),
+                'message': _("VastPay will no longer send payment notifications."),
+                'type': 'success',
+                'sticky': False,
+                'next': {'type': 'ir.actions.act_window_close'},
             },
         }
 
