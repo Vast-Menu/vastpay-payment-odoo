@@ -33,7 +33,14 @@
                                 string="Register Webhook"
                                 type="object"
                                 class="btn-secondary"
-                                icon="fa-bell"/>
+                                icon="fa-bell"
+                                invisible="vastpay_webhook_registered"/>
+                        <button name="action_vastpay_disable_webhook"
+                                string="Disable Webhook"
+                                type="object"
+                                class="btn-secondary"
+                                icon="fa-bell-slash"
+                                invisible="not vastpay_webhook_registered"/>
                     </div>
                 </group>
             </group>
