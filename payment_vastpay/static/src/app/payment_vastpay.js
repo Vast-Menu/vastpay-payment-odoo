@@ -203,10 +203,10 @@ export class PaymentVastPay extends PaymentInterface {
             amountLabel,
             paymentUrl: payment_url,
             onClose: () => this._vastpayCloseOnly(),
+            // Always offer an explicit "check now" action: even with a
+            // webhook, confirmation can lag or fail, so the cashier can
+            // force an immediate status re-fetch.
             onCheck: () => this._manualCheck(),
-            // Without a webhook the paid status only arrives via polling;
-            // give the cashier an explicit "check now" action.
-            showCheckButton: !this.payment_method_id.vastpay_webhook_registered,
         });
         this._settled = false;
         return new Promise((resolve) => {
