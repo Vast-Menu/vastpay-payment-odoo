@@ -109,6 +109,22 @@ patch(PosStore.prototype, {
     },
 
     /**
+     * Single chokepoint for the in-order customer flow: the partner list
+     * (customer button on the product/payment screen, deselect inside the
+     * partner list) resolves through here, with `set_partner(false)` for
+     * removal. After super runs, void any pending VastPay QR set to
+     * auto-invoice if the order is now partnerless — that QR can no longer
+     * be invoiced once paid (see _vastpayVoidLinesNeedingPartner). The void
+     * method self-guards on `get_partner()` being falsy, so this is a no-op
+     * when the cashier simply picked another customer.
+     */
+    async selectPartner() {
+        const res = await super.selectPartner(...arguments);
+        this._vastpayVoidLinesNeedingPartner(this.get_order());
+        return res;
+    },
+
+    /**
      * Cancel at VastPay and remove every unpaid VastPay payment line whose
      * QR no longer matches the order total.
      *
@@ -157,10 +173,70 @@ patch(PosStore.prototype, {
             }
             stale.push(line);
         }
-        if (!stale.length) {
+        this._vastpayCancelAndDropLines(
+            order,
+            stale,
+            _t(
+                "The order changed, so the pending VastPay QR was cancelled. " +
+                    "Generate a new QR for the updated amount."
+            )
+        );
+    },
+
+    /**
+     * Removing the customer from an order whose VastPay payment auto-invoices
+     * would leave a still-payable QR that can never be invoiced (the invoice
+     * needs a partner). Cancel and drop those pending lines so the cashier
+     * re-selects a customer and issues a fresh QR. Lines whose method does
+     * not auto-invoice, already-captured ("done") lines, and lines with no
+     * QR yet are left untouched.
+     */
+    _vastpayVoidLinesNeedingPartner(order) {
+        if (!order || order.finalized || order.get_partner()) {
             return;
         }
-        for (const line of stale) {
+        const orphan = [];
+        for (const line of order.payment_ids || []) {
+            const pm = line.payment_method_id;
+            if (pm?.use_payment_terminal !== "vastpay") {
+                continue;
+            }
+            if (!pm.vastpay_auto_invoice) {
+                continue; // no invoice will be attempted; QR stays valid
+            }
+            if (!line.transaction_id) {
+                continue; // no QR the customer could pay
+            }
+            if (line.is_done?.()) {
+                continue; // captured payment — never cancel/delete
+            }
+            if (line.get_payment_status?.() === "waitingCancel") {
+                continue; // a cancel is already in flight
+            }
+            orphan.push(line);
+        }
+        this._vastpayCancelAndDropLines(
+            order,
+            orphan,
+            _t(
+                "The customer was removed, so the pending VastPay QR was " +
+                    "cancelled (this payment auto-invoices the order and needs " +
+                    "a customer). Select a customer and generate a new QR."
+            )
+        );
+    },
+
+    /**
+     * Cancel each line at VastPay (through its live terminal if one is still
+     * mid-flight, otherwise via a direct best-effort RPC), drop it from the
+     * order, and show one explanatory warning. Shared by the stale-amount
+     * and missing-customer void paths. No-op on an empty list.
+     */
+    _vastpayCancelAndDropLines(order, lines, message) {
+        if (!lines || !lines.length) {
+            return;
+        }
+        for (const line of lines) {
             const pm = line.payment_method_id;
             const term = pm?.payment_terminal;
             if (
@@ -183,12 +259,6 @@ patch(PosStore.prototype, {
             }
             order.remove_paymentline(line);
         }
-        this.env.services.notification?.add?.(
-            _t(
-                "The order changed, so the pending VastPay QR was cancelled. " +
-                    "Generate a new QR for the updated amount."
-            ),
-            { type: "warning" }
-        );
+        this.env.services.notification?.add?.(message, { type: "warning" });
     },
 });
