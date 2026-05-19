@@ -163,6 +163,7 @@ class PosPaymentMethod(models.Model):
             'provider_id': provider.id,
             'pos_session_id': session.id or False,
             'pos_reference': data.get('pos_reference'),
+            'pos_order_uuid': data.get('pos_order_uuid'),
             'vastpay_invoice_id': '',
             'table_id': table_id,
             'amount': amount,
@@ -238,6 +239,51 @@ class PosPaymentMethod(models.Model):
             'amount': tracking.amount,
             'auto_validate': tracking.provider_id.vastpay_auto_validate_order,
         }
+
+    def vastpay_reconcile_status(self, data):
+        """Authoritative status for reconciling an orphaned POS line.
+
+        Unlike ``vastpay_poll_status`` (which trusts the tracking record
+        and only re-syncs while draft/pending), this ALWAYS re-fetches the
+        invoice from VastPay. This is needed when the POS reopens an order
+        whose payment was orphaned: the tracking may read 'cancelled'
+        (an older browser-close path cancelled it) or be stale, while
+        VastPay itself shows the customer actually paid. We go back to the
+        source of truth so a paid order is recovered instead of re-charged.
+        """
+        self.ensure_one()
+        self._vastpay_check_access()
+        invoice_id = str(data.get('invoice_id') or '')
+        tracking = self.env['vastpay.pos.payment'].sudo().search(
+            [('vastpay_invoice_id', '=', invoice_id)], limit=1,
+        )
+        if not tracking:
+            return {'state': 'error', 'error': _("Unknown payment.")}
+        try:
+            state = tracking._sync_from_vastpay()
+        except Exception:  # noqa: BLE001
+            _logger.exception("VastPay: reconcile re-fetch failed")
+            state = tracking.state
+        result = {
+            'state': state,
+            'amount': tracking.amount,
+            'auto_validate': tracking.provider_id.vastpay_auto_validate_order,
+        }
+        # Still resumable (not paid, not cancelled/expired): hand back the
+        # SAME invoice's QR so Retry resumes it instead of creating a new
+        # one and orphaning a still-payable invoice.
+        if state in ('draft', 'pending') and tracking.table_id:
+            provider = tracking.provider_id.sudo()
+            payment_url = '%s/?table_id=%s' % (
+                provider._vastpay_get_payment_url(), tracking.table_id,
+            )
+            result.update({
+                'invoice_id': tracking.vastpay_invoice_id,
+                'table_id': tracking.table_id,
+                'payment_url': payment_url,
+                'qr_image': self._vastpay_qr_data_url(payment_url),
+            })
+        return result
 
     def vastpay_cancel_payment(self, data):
         """Cancel a pending VastPay invoice."""

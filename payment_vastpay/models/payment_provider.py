@@ -7,9 +7,17 @@ from odoo.exceptions import ValidationError
 _logger = logging.getLogger(__name__)
 
 VASTPAY_BASE_URLS = {
+    # Live uses production; Test/Staging/Disabled use the staging API.
     'enabled': 'https://api.vast-pay.com/api/v2',
+    'staging': 'https://api-staging.vast-pay.com/api/v2',
     'test': 'https://api-staging.vast-pay.com/api/v2',
+    'disabled': 'https://api-staging.vast-pay.com/api/v2',
 }
+
+# cloudflared exposes the quick-tunnel hostname on its metrics server. The
+# port is pinned via docker-compose (`--metrics 0.0.0.0:2000`) and the
+# service is reachable from the Odoo container by its compose name.
+VASTPAY_TUNNEL_QUICKTUNNEL_URL = 'http://tunnel:2000/quicktunnel'
 
 # PWA host prefix per selected PWA version. The environment (Test vs Live)
 # adds the "-staging" suffix the same way the API URLs do.
@@ -27,6 +35,13 @@ class PaymentProvider(models.Model):
     code = fields.Selection(
         selection_add=[('vastpay', 'VastPay')],
         ondelete={'vastpay': 'set default'},
+    )
+    # Odoo core ships disabled / enabled / test. Add a Staging tier:
+    # behaves like Live (real public webhook domain) but talks to the
+    # VastPay -staging API/PWA endpoints.
+    state = fields.Selection(
+        selection_add=[('staging', "Staging")],
+        ondelete={'staging': 'set default'},
     )
     # Credentials are intentionally NOT required_if_provider: the provider
     # ships in Test Mode without credentials. VastPay is simply hidden from
@@ -90,6 +105,44 @@ class PaymentProvider(models.Model):
         prefix = VASTPAY_PWA_PREFIXES.get(self.vastpay_pwa_version, 'pwa')
         suffix = '' if self.state == 'enabled' else '-staging'
         return f'https://{prefix}{suffix}.vast-pay.com'
+
+    def _vastpay_get_tunnel_base_url(self):
+        """Return the public cloudflared quick-tunnel base URL, or None.
+
+        Reads cloudflared's pinned metrics server. Any failure (tunnel
+        container down, endpoint unreachable, malformed payload) returns
+        None so the caller can fall back gracefully -- payments are still
+        confirmed by the POS status-polling loop regardless of the webhook.
+        """
+        try:
+            resp = requests.get(VASTPAY_TUNNEL_QUICKTUNNEL_URL, timeout=5)
+            resp.raise_for_status()
+            hostname = (resp.json() or {}).get('hostname')
+        except (requests.RequestException, ValueError) as exc:
+            _logger.warning("VastPay: cloudflared tunnel URL unavailable: %s", exc)
+            return None
+        if not hostname:
+            return None
+        return f'https://{hostname.strip().rstrip("/")}'
+
+    def _vastpay_webhook_base_url(self):
+        """Resolve the base URL VastPay should POST webhooks to.
+
+        - test:     the cloudflared tunnel (local dev), falling back to
+                    ``web.base.url`` if the tunnel is unreachable.
+        - staging / enabled: the deployment's real public ``web.base.url``.
+        - disabled: empty string (disables the webhook on VastPay).
+        """
+        self.ensure_one()
+        if self.state == 'disabled':
+            return ''
+        config_url = (
+            self.env['ir.config_parameter'].sudo().get_param('web.base.url')
+            or ''
+        ).rstrip('/')
+        if self.state == 'test':
+            return self._vastpay_get_tunnel_base_url() or config_url
+        return config_url
 
     def _vastpay_get_headers(self):
         """Return common headers for VastPay API calls."""
@@ -300,18 +353,34 @@ class PaymentProvider(models.Model):
             },
         }
 
+    def _vastpay_webhook_url(self):
+        """Full webhook endpoint for the current State, or '' to disable."""
+        self.ensure_one()
+        base_url = self._vastpay_webhook_base_url()
+        return f'{base_url}/payment/vastpay/webhook' if base_url else ''
+
     def action_vastpay_register_webhook(self):
         """Register the webhook URL with VastPay."""
         self.ensure_one()
-        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
-        webhook_url = f'{base_url}/payment/vastpay/webhook'
+        webhook_url = self._vastpay_webhook_url()
         self._vastpay_register_webhook(webhook_url)
+        if webhook_url:
+            title = _("Webhook Registered")
+            message = _(
+                "VastPay will send payment notifications to: %s"
+            ) % webhook_url
+        else:
+            title = _("Webhook Disabled")
+            message = _(
+                "No public URL is available for this State, so the webhook "
+                "was disabled. Payments are still confirmed by POS polling."
+            )
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': _("Webhook Registered"),
-                'message': _("VastPay will send payment notifications to: %s") % webhook_url,
+                'title': title,
+                'message': message,
                 'type': 'success',
                 'sticky': False,
                 'next': {'type': 'ir.actions.act_window_close'},
@@ -335,6 +404,39 @@ class PaymentProvider(models.Model):
         }
 
     # --- Overrides ---
+
+    def write(self, vals):
+        """Keep the VastPay-side webhook in sync when State changes.
+
+        Switching to Disabled disables the webhook on VastPay; switching to
+        Test/Staging/Live re-registers it at the URL resolved for that mode.
+        A failed VastPay call is logged but never blocks saving the record,
+        and POS status-polling still confirms payments regardless.
+        """
+        res = super().write(vals)
+        if 'state' not in vals or self.env.context.get('vastpay_skip_webhook_sync'):
+            return res
+        for provider in self:
+            if provider.code != 'vastpay':
+                continue
+            psudo = provider.sudo()
+            target_state = vals['state']
+            # No credentials yet -> nothing we can call on VastPay.
+            if target_state != 'disabled' and not (
+                psudo.vastpay_client_id and psudo.vastpay_client_secret
+            ):
+                continue
+            try:
+                webhook_url = psudo._vastpay_webhook_url()
+                psudo.with_context(
+                    vastpay_skip_webhook_sync=True
+                )._vastpay_register_webhook(webhook_url)
+            except Exception:
+                _logger.exception(
+                    "VastPay: failed to auto-sync webhook after State -> %s",
+                    target_state,
+                )
+        return res
 
     def _get_supported_currencies(self):
         """Override to return VastPay supported currencies."""
