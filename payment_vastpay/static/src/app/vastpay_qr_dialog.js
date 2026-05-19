@@ -12,7 +12,6 @@ export class VastPayQRDialog extends Component {
         paymentUrl: String,
         onClose: { type: Function, optional: true },
         onCheck: { type: Function, optional: true },
-        showCheckButton: { type: Boolean, optional: true },
     };
 
     setup() {

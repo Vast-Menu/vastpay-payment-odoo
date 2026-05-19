@@ -23,7 +23,7 @@
             </div>
             <t t-set-slot="footer">
                 <button class="btn btn-secondary" t-on-click="closeOnly">Close</button>
-                <button t-if="props.showCheckButton" class="btn btn-primary"
+                <button class="btn btn-primary"
                         t-att-disabled="state.checking" t-on-click="check">
                     <t t-if="state.checking">Checking…</t>
                     <t t-else="">Check payment</t>

@@ -28,10 +28,6 @@ class PosPaymentMethod(models.Model):
         related='vastpay_provider_id.vastpay_auto_validate_order',
         readonly=True,
     )
-    vastpay_webhook_registered = fields.Boolean(
-        related='vastpay_provider_id.vastpay_webhook_registered',
-        readonly=True,
-    )
 
     @api.model
     def _load_pos_data_domain(self, data, config):
@@ -63,11 +59,9 @@ class PosPaymentMethod(models.Model):
     @api.model
     def _load_pos_data_fields(self, config):
         # Expose the non-secret auto-validate flag (so the payment interface
-        # can honour it), the webhook-registered flag (so the QR dialog can
-        # offer a manual status check when no webhook is set up) and the
-        # image (so the POS shows the brand logo).
+        # can honour it) and the image (so the POS shows the brand logo).
         params = super()._load_pos_data_fields(config)
-        params += ['vastpay_auto_validate_order', 'vastpay_webhook_registered']
+        params += ['vastpay_auto_validate_order']
         if 'image' not in params:
             params += ['image']
         return params
