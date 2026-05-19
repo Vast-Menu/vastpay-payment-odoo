@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:16
+    container_name: db-odoo-19
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: odoo
@@ -15,6 +16,7 @@ services:
 
   odoo:
     image: odoo:19.0
+    container_name: odoo-19
     depends_on:
       db:
         condition: service_healthy
@@ -31,6 +33,7 @@ services:
       - odoo-data:/var/lib/odoo
 
   tunnel:
+    container_name: tunnel-odoo-19
     image: cloudflare/cloudflared:latest
     depends_on:
       - odoo
