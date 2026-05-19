@@ -103,6 +103,21 @@ patch(PosStore.prototype, {
     },
 
     /**
+     * Single chokepoint for setting/removing the current order's customer
+     * (partner list, customer button on the product/payment screen all
+     * funnel through here). When the customer is removed, void any pending
+     * VastPay QR that is set to auto-invoice — that QR can no longer be
+     * invoiced once paid (see _vastpayVoidLinesNeedingPartner).
+     */
+    setPartnerToCurrentOrder(partner) {
+        const res = super.setPartnerToCurrentOrder(...arguments);
+        if (!partner) {
+            this._vastpayVoidLinesNeedingPartner(this.getOrder());
+        }
+        return res;
+    },
+
+    /**
      * Cancel at VastPay and remove every unpaid VastPay payment line whose
      * QR no longer matches the order total.
      *
@@ -151,10 +166,70 @@ patch(PosStore.prototype, {
             }
             stale.push(line);
         }
-        if (!stale.length) {
+        this._vastpayCancelAndDropLines(
+            order,
+            stale,
+            _t(
+                "The order changed, so the pending VastPay QR was cancelled. " +
+                    "Generate a new QR for the updated amount."
+            )
+        );
+    },
+
+    /**
+     * Removing the customer from an order whose VastPay payment auto-invoices
+     * would leave a still-payable QR that can never be invoiced (the invoice
+     * needs a partner). Cancel and drop those pending lines so the cashier
+     * re-selects a customer and issues a fresh QR. Lines whose method does
+     * not auto-invoice, already-captured ("done") lines, and lines with no
+     * QR yet are left untouched.
+     */
+    _vastpayVoidLinesNeedingPartner(order) {
+        if (!order || order.finalized || order.getPartner()) {
             return;
         }
-        for (const line of stale) {
+        const orphan = [];
+        for (const line of order.payment_ids || []) {
+            const pm = line.payment_method_id;
+            if (pm?.use_payment_terminal !== "vastpay") {
+                continue;
+            }
+            if (!pm.vastpay_auto_invoice) {
+                continue; // no invoice will be attempted; QR stays valid
+            }
+            if (!line.transaction_id) {
+                continue; // no QR the customer could pay
+            }
+            if (line.isDone?.()) {
+                continue; // captured payment — never cancel/delete
+            }
+            if (line.getPaymentStatus?.() === "waitingCancel") {
+                continue; // a cancel is already in flight
+            }
+            orphan.push(line);
+        }
+        this._vastpayCancelAndDropLines(
+            order,
+            orphan,
+            _t(
+                "The customer was removed, so the pending VastPay QR was " +
+                    "cancelled (this payment auto-invoices the order and needs " +
+                    "a customer). Select a customer and generate a new QR."
+            )
+        );
+    },
+
+    /**
+     * Cancel each line at VastPay (through its live terminal if one is still
+     * mid-flight, otherwise via a direct best-effort RPC), drop it from the
+     * order, and show one explanatory warning. Shared by the stale-amount
+     * and missing-customer void paths. No-op on an empty list.
+     */
+    _vastpayCancelAndDropLines(order, lines, message) {
+        if (!lines || !lines.length) {
+            return;
+        }
+        for (const line of lines) {
             const pm = line.payment_method_id;
             const term = pm?.payment_terminal;
             if (
@@ -177,12 +252,6 @@ patch(PosStore.prototype, {
             }
             order.removePaymentline(line);
         }
-        this.env.services.notification?.add?.(
-            _t(
-                "The order changed, so the pending VastPay QR was cancelled. " +
-                    "Generate a new QR for the updated amount."
-            ),
-            { type: "warning" }
-        );
+        this.env.services.notification?.add?.(message, { type: "warning" });
     },
 });

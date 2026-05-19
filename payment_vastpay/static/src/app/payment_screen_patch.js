@@ -1,5 +1,7 @@
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { patch } from "@web/core/utils/patch";
+import { _t } from "@web/core/l10n/translation";
+import { AlertDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 
 patch(PaymentScreen.prototype, {
     setup() {
@@ -139,6 +141,26 @@ patch(PaymentScreen.prototype, {
         const pm = line?.payment_method_id;
         if (pm?.use_payment_terminal !== "vastpay") {
             return super.sendPaymentRequest(...arguments);
+        }
+        // Auto-invoicing a paid POS order needs a customer (the invoice
+        // partner). VastPay confirms out of band (webhook/poll), so once the
+        // QR is paid there is no chance to ask for one — the server-side
+        // auto-invoice would just fail. Refuse to start the payment until a
+        // customer is set, rather than capture money for an order that can
+        // never be invoiced.
+        if (pm.vastpay_auto_invoice && !this.currentOrder.getPartner()) {
+            this.env.services.dialog.add(AlertDialog, {
+                title: _t("Customer required"),
+                body: _t(
+                    "This VastPay payment automatically invoices the order, " +
+                        "which requires a customer. Select a customer before " +
+                        "taking the payment."
+                ),
+            });
+            if (line.getPaymentStatus?.() !== "retry") {
+                line.setPaymentStatus("retry");
+            }
+            return false;
         }
         const cfg = this.pos.config;
         const original = cfg.auto_validate_terminal_payment;

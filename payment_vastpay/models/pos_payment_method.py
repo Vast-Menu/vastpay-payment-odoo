@@ -28,6 +28,10 @@ class PosPaymentMethod(models.Model):
         related='vastpay_provider_id.vastpay_auto_validate_order',
         readonly=True,
     )
+    vastpay_auto_invoice = fields.Boolean(
+        related='vastpay_provider_id.vastpay_auto_invoice',
+        readonly=True,
+    )
 
     @api.model
     def _load_pos_data_domain(self, data, config):
@@ -58,10 +62,12 @@ class PosPaymentMethod(models.Model):
 
     @api.model
     def _load_pos_data_fields(self, config):
-        # Expose the non-secret auto-validate flag (so the payment interface
-        # can honour it) and the image (so the POS shows the brand logo).
+        # Expose the non-secret auto-validate / auto-invoice flags (so the
+        # payment interface can honour them: auto-validate scopes the POS
+        # close behaviour, auto-invoice requires a customer up front) and the
+        # image (so the POS shows the brand logo).
         params = super()._load_pos_data_fields(config)
-        params += ['vastpay_auto_validate_order']
+        params += ['vastpay_auto_validate_order', 'vastpay_auto_invoice']
         if 'image' not in params:
             params += ['image']
         return params
