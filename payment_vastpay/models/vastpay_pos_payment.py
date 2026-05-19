@@ -11,6 +11,12 @@ _STATUS_MAP = {
     'pending': 'pending',
     'cancelled': 'cancelled',
     'canceled': 'cancelled',
+    # VastPay also returns the short/expired forms; a cancelled or
+    # expired invoice can no longer be paid, so it must NOT be treated as
+    # a resumable 'pending' (otherwise Retry would re-show a dead QR).
+    'cancel': 'cancelled',
+    'expired': 'cancelled',
+    'failed': 'cancelled',
 }
 
 
@@ -25,6 +31,13 @@ class VastPayPosPayment(models.Model):
     )
     pos_session_id = fields.Many2one('pos.session', string="POS Session")
     pos_order_id = fields.Many2one('pos.order', string="POS Order")
+    pos_order_uuid = fields.Char(
+        string="POS Order UUID", index=True,
+        help="Stable POS order identifier used to link the payment to the "
+             "order. Unlike the order reference/name (which is '/' until the "
+             "order is sequenced) the uuid is set as soon as the order is "
+             "created in the browser.",
+    )
     pos_reference = fields.Char(string="POS Order Reference", index=True)
     vastpay_invoice_id = fields.Char(
         string="VastPay Invoice ID", index=True,
@@ -46,10 +59,21 @@ class VastPayPosPayment(models.Model):
 
     @api.model
     def _find_for_notification(self, notification_data):
-        """Locate the tracking record from a (loosely parsed) webhook body."""
-        data = notification_data.get('data') or notification_data
+        """Locate the tracking record from a (loosely parsed) webhook body.
+
+        VastPay nests the invoice under ``payload``; ``data`` and a flat
+        top-level shape are kept as fallbacks since the body is undocumented.
+        """
+        data = (
+            notification_data.get('payload')
+            or notification_data.get('data')
+            or notification_data
+        )
+        if not isinstance(data, dict):
+            data = notification_data
         invoice_id = (
             data.get('id')
+            or data.get('invoice_id')
             or notification_data.get('invoice_id')
             or notification_data.get('id')
         )
@@ -78,6 +102,7 @@ class VastPayPosPayment(models.Model):
         Returns the internal state after syncing.
         """
         self.ensure_one()
+        previous_state = self.state
         invoice = self.provider_id._vastpay_get_invoice(self.vastpay_invoice_id)
         data = invoice.get('data', invoice) or {}
         raw_status = (data.get('status') or '').lower()
@@ -102,7 +127,37 @@ class VastPayPosPayment(models.Model):
 
         if new_state == 'paid':
             self._apply_to_pos_order()
+        # Push to the open POS screen ONLY on a terminal state change.
+        # Notifying on 'pending' would feed back into the poll loop
+        # (poll -> sync -> notify -> checkNow -> poll ...) and storm the
+        # server. Terminal states are what the screen is waiting for.
+        if new_state != previous_state and new_state in (
+            'paid', 'cancelled', 'error',
+        ):
+            self._notify_pos(new_state)
         return new_state
+
+    def _notify_pos(self, state):
+        """Notify the originating POS that this payment changed state.
+
+        Mirrors Odoo's pos_online_payment bus pattern: a name-only channel
+        notification inviting the browser to re-check via a safe RPC. No
+        sensitive data is sent.
+        """
+        self.ensure_one()
+        config = self.pos_session_id.config_id
+        if not config or not self.vastpay_invoice_id:
+            return
+        try:
+            config._notify('VASTPAY_PAYMENT_NOTIFICATION', {
+                'invoice_id': self.vastpay_invoice_id,
+                'state': state,
+            })
+        except Exception:
+            _logger.exception(
+                "VastPay: failed to push POS notification for invoice %s",
+                self.vastpay_invoice_id,
+            )
 
     def _apply_to_pos_order(self):
         """Apply the configured close behaviour once the payment is paid.
@@ -113,7 +168,13 @@ class VastPayPosPayment(models.Model):
         self.ensure_one()
         provider = self.provider_id
         order = self.pos_order_id
-        if not order and self.pos_reference:
+        if not order and self.pos_order_uuid:
+            order = self.env['pos.order'].search(
+                [('uuid', '=', self.pos_order_uuid)], limit=1,
+            )
+            if order:
+                self.pos_order_id = order
+        if not order and self.pos_reference and self.pos_reference != '/':
             order = self.env['pos.order'].search(
                 [('pos_reference', '=', self.pos_reference)], limit=1,
             )

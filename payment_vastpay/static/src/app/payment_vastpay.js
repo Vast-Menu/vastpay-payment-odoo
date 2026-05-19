@@ -20,6 +20,47 @@ export class PaymentVastPay extends PaymentInterface {
         // response so the close behaviour follows the current provider
         // setting rather than the value cached when the POS session opened.
         this._autoValidate = null;
+        this._busBound = false;
+        this._subscribeBus();
+    }
+
+    /**
+     * Subscribe once to the server push sent when a VastPay payment is
+     * confirmed out of band (webhook / late order-sync). The bus message
+     * is only a trigger: we react by running the same safe poll RPC, so a
+     * confirmed payment completes the open screen immediately instead of
+     * waiting for the next 60s poll tick. The periodic poll remains as a
+     * fallback if the bus is unavailable.
+     */
+    _subscribeBus() {
+        if (this._busBound) {
+            return;
+        }
+        try {
+            this.pos.data.connectWebSocket(
+                "VASTPAY_PAYMENT_NOTIFICATION",
+                ({ invoice_id }) => {
+                    if (
+                        this._settled ||
+                        !this.invoiceId ||
+                        invoice_id !== this.invoiceId
+                    ) {
+                        return;
+                    }
+                    this._checkNow();
+                }
+            );
+            this._busBound = true;
+        } catch {
+            // Bus unavailable; the periodic poll still covers completion.
+        }
+    }
+
+    /** Run a status check immediately (bus-triggered), reusing the poll path. */
+    _checkNow() {
+        clearTimeout(this.pollTimer);
+        this.pollTimer = null;
+        this._poll();
     }
 
     sendPaymentRequest(uuid) {
@@ -35,10 +76,17 @@ export class PaymentVastPay extends PaymentInterface {
 
     close() {
         super.close();
-        // Always resolve any in-flight request so the POS clears its
+        // Resolve any in-flight request LOCALLY so the POS clears its
         // `paymentTerminalInProgress` flag (otherwise the next electronic
-        // payment is blocked with "already an electronic payment in progress").
-        this._vastpayCancel();
+        // payment is blocked with "already an electronic payment in
+        // progress"). Crucially we do NOT call _serverCancel() here: a
+        // screen teardown / navigate-away / browser close must not cancel
+        // the VastPay invoice -- the customer may still pay and the
+        // webhook will confirm it. The line is reconciled with the server
+        // when the order's payment screen is next opened (see
+        // PaymentScreen._vastpayReconcileOrphanLines). Explicit cashier
+        // cancel still goes through sendPaymentCancel -> _vastpayCancel.
+        this._finish(false);
     }
 
     _call(action, data) {
@@ -125,6 +173,42 @@ export class PaymentVastPay extends PaymentInterface {
     }
 
 
+    /**
+     * Open the QR dialog for a given invoice and return the promise the
+     * POS awaits, resolved once the payment settles (poll/bus/timeout).
+     * Shared by the "create new invoice" and "resume existing invoice"
+     * paths so a resume never re-creates an invoice.
+     */
+    _startSession({ invoice_id, qr_image, payment_url, amount }) {
+        const line = this.pos.getOrder()?.getSelectedPaymentline();
+        this.invoiceId = invoice_id;
+        if (line) {
+            line.transaction_id = invoice_id;
+            line.setPaymentStatus("waitingCard");
+        }
+        const amountLabel =
+            this.env.utils?.formatCurrency?.(amount) ?? String(amount);
+        this.closeDialog = this.env.services.dialog.add(VastPayQRDialog, {
+            qrImage: qr_image,
+            amountLabel,
+            paymentUrl: payment_url,
+            onCancel: () => this._vastpayCancel(),
+            onCheck: () => this._manualCheck(),
+            // Without a webhook the paid status only arrives via polling;
+            // give the cashier an explicit "check now" action.
+            showCheckButton: !this.payment_method_id.vastpay_webhook_registered,
+        });
+        this._settled = false;
+        return new Promise((resolve) => {
+            this._resolve = resolve;
+            this.timeoutTimer = setTimeout(() => {
+                this._serverCancel();
+                this._finish(false, _t("VastPay payment timed out."));
+            }, PAYMENT_TIMEOUT);
+            this._poll();
+        });
+    }
+
     async _vastpayPay() {
         const order = this.pos.getOrder();
         const line = order?.getSelectedPaymentline();
@@ -134,11 +218,52 @@ export class PaymentVastPay extends PaymentInterface {
         }
 
         this.invoiceId = null;
+
+        // Retry on a line that already has an invoice: don't blindly
+        // recreate (that would orphan a still-payable invoice). Pull the
+        // existing invoice's authoritative status first.
+        const existingId = line.transaction_id;
+        if (existingId) {
+            let r = null;
+            try {
+                r = await this._call("vastpay_reconcile_status", {
+                    invoice_id: existingId,
+                });
+            } catch {
+                r = null;
+            }
+            if (r && r.state === "paid") {
+                // Already paid (e.g. webhook while dialog was gone): just
+                // complete the order, no new invoice.
+                this._trackAutoValidate(r);
+                this.invoiceId = existingId;
+                this._finish(true);
+                return true;
+            }
+            if (
+                r &&
+                (r.state === "pending" || r.state === "draft") &&
+                r.qr_image
+            ) {
+                // Still alive and NOT cancelled -> resume the SAME invoice.
+                this._trackAutoValidate(r);
+                return this._startSession({
+                    invoice_id: existingId,
+                    qr_image: r.qr_image,
+                    payment_url: r.payment_url,
+                    amount: line.amount,
+                });
+            }
+            // cancelled / expired / error / unknown -> fall through and
+            // create a fresh invoice below.
+        }
+
         let resp;
         try {
             resp = await this._call("vastpay_make_payment", {
                 amount: line.amount,
                 pos_reference: order.name,
+                pos_order_uuid: order.uuid,
                 session_id: this.pos.session.id,
             });
         } catch {
@@ -154,31 +279,11 @@ export class PaymentVastPay extends PaymentInterface {
         }
 
         this._trackAutoValidate(resp);
-        this.invoiceId = resp.invoice_id;
-        line.transaction_id = resp.invoice_id;
-        line.setPaymentStatus("waitingCard");
-
-        const amountLabel =
-            this.env.utils?.formatCurrency?.(line.amount) ?? String(line.amount);
-        this.closeDialog = this.env.services.dialog.add(VastPayQRDialog, {
-            qrImage: resp.qr_image,
-            amountLabel,
-            paymentUrl: resp.payment_url,
-            onCancel: () => this._vastpayCancel(),
-            onCheck: () => this._manualCheck(),
-            // Without a webhook the paid status only arrives via polling;
-            // give the cashier an explicit "check now" action.
-            showCheckButton: !this.payment_method_id.vastpay_webhook_registered,
-        });
-
-        this._settled = false;
-        return new Promise((resolve) => {
-            this._resolve = resolve;
-            this.timeoutTimer = setTimeout(() => {
-                this._serverCancel();
-                this._finish(false, _t("VastPay payment timed out."));
-            }, PAYMENT_TIMEOUT);
-            this._poll();
+        return this._startSession({
+            invoice_id: resp.invoice_id,
+            qr_image: resp.qr_image,
+            payment_url: resp.payment_url,
+            amount: line.amount,
         });
     }
 
