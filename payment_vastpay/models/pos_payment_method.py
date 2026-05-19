@@ -206,6 +206,7 @@ class PosPaymentMethod(models.Model):
             'table_id': table_id,
             'payment_url': payment_url,
             'qr_image': self._vastpay_qr_data_url(payment_url),
+            'auto_validate': provider.vastpay_auto_validate_order,
         }
 
     def vastpay_poll_status(self, data):
@@ -230,7 +231,13 @@ class PosPaymentMethod(models.Model):
                 state = tracking._sync_from_vastpay()
             except Exception:  # noqa: BLE001
                 _logger.exception("VastPay: poll re-fetch failed")
-        return {'state': state, 'amount': tracking.amount}
+        # Return the live auto-validate flag so the POS honours the current
+        # provider setting, not the value cached when the POS session opened.
+        return {
+            'state': state,
+            'amount': tracking.amount,
+            'auto_validate': tracking.provider_id.vastpay_auto_validate_order,
+        }
 
     def vastpay_cancel_payment(self, data):
         """Cancel a pending VastPay invoice."""

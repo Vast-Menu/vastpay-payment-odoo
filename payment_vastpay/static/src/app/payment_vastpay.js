@@ -16,6 +16,10 @@ export class PaymentVastPay extends PaymentInterface {
         this._resolve = null;
         this._settled = true;
         this._checking = false;
+        // Live "auto-validate POS order" flag, refreshed from every server
+        // response so the close behaviour follows the current provider
+        // setting rather than the value cached when the POS session opened.
+        this._autoValidate = null;
     }
 
     sendPaymentRequest(uuid) {
@@ -71,6 +75,24 @@ export class PaymentVastPay extends PaymentInterface {
     }
 
     /**
+     * Resolve the auto-validate decision from the freshest source: the live
+     * flag returned by the server, falling back to the POS-loaded payment
+     * method value only if no server response carried it yet.
+     */
+    _liveAutoValidate() {
+        if (this._autoValidate !== null) {
+            return !!this._autoValidate;
+        }
+        return !!this.payment_method_id?.vastpay_auto_validate_order;
+    }
+
+    _trackAutoValidate(resp) {
+        if (resp && resp.auto_validate !== undefined) {
+            this._autoValidate = !!resp.auto_validate;
+        }
+    }
+
+    /**
      * Settle the in-flight payment exactly once: stop timers/dialog, set the
      * line status, optionally show an error, and resolve the promise returned
      * by sendPaymentRequest so the POS can clear its in-progress flag.
@@ -81,6 +103,15 @@ export class PaymentVastPay extends PaymentInterface {
         }
         this._settled = true;
         this._cleanup();
+        // The parent PaymentScreen.sendPaymentRequest auto-validates the
+        // order right after this promise resolves, gated on
+        // pos.config.auto_validate_terminal_payment. Set it to the live
+        // VastPay flag so a disabled flag is honoured even if the POS cached
+        // a stale (enabled) value at session start.
+        if (success) {
+            this.pos.config.auto_validate_terminal_payment =
+                this._liveAutoValidate();
+        }
         const line = this._line();
         line?.setPaymentStatus(success ? "done" : "retry");
         if (errorMsg) {
@@ -122,6 +153,7 @@ export class PaymentVastPay extends PaymentInterface {
             return false;
         }
 
+        this._trackAutoValidate(resp);
         this.invoiceId = resp.invoice_id;
         line.transaction_id = resp.invoice_id;
         line.setPaymentStatus("waitingCard");
@@ -176,6 +208,7 @@ export class PaymentVastPay extends PaymentInterface {
             return;
         }
 
+        this._trackAutoValidate(resp);
         const state = resp?.state;
         if (state === "paid") {
             this._finish(true);
@@ -213,6 +246,7 @@ export class PaymentVastPay extends PaymentInterface {
             if (this._settled) {
                 return null;
             }
+            this._trackAutoValidate(resp);
             const state = resp?.state;
             if (state === "paid") {
                 this._finish(true);
