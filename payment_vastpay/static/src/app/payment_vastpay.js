@@ -15,6 +15,7 @@ export class PaymentVastPay extends PaymentInterface {
         this.invoiceId = null;
         this._resolve = null;
         this._settled = true;
+        this._checking = false;
         // Live "auto-validate POS order" flag, refreshed from every server
         // response so the close behaviour follows the current provider
         // setting rather than the value cached when the POS session opened.
@@ -164,6 +165,10 @@ export class PaymentVastPay extends PaymentInterface {
             amountLabel,
             paymentUrl: resp.payment_url,
             onCancel: () => this._vastpayCancel(),
+            onCheck: () => this._manualCheck(),
+            // Without a webhook the paid status only arrives via polling;
+            // give the cashier an explicit "check now" action.
+            showCheckButton: !this.payment_method_id.vastpay_webhook_registered,
         });
 
         this._settled = false;
@@ -213,6 +218,46 @@ export class PaymentVastPay extends PaymentInterface {
             this._finish(false, resp?.error || _t("VastPay payment failed."));
         } else {
             this.pollTimer = setTimeout(() => this._poll(), POLL_INTERVAL);
+        }
+    }
+
+    /**
+     * Force an immediate status check (used by the QR dialog's manual
+     * "Check payment" button when no webhook is registered). Reuses the
+     * same server endpoint as the poll loop, which re-fetches the invoice
+     * from VastPay. Returns a result the dialog can render:
+     *   {state} on success, {unreachable:true} if Odoo/VastPay is down,
+     *   or null if the payment was already settled/closed.
+     */
+    async _manualCheck() {
+        if (this._settled || this._checking) {
+            return null;
+        }
+        this._checking = true;
+        try {
+            let resp;
+            try {
+                resp = await this._call("vastpay_poll_status", {
+                    invoice_id: this.invoiceId,
+                });
+            } catch {
+                return { unreachable: true };
+            }
+            if (this._settled) {
+                return null;
+            }
+            this._trackAutoValidate(resp);
+            const state = resp?.state;
+            if (state === "paid") {
+                this._finish(true);
+            } else if (state === "cancelled") {
+                this._finish(false);
+            } else if (state === "error") {
+                this._finish(false, resp?.error || _t("VastPay payment failed."));
+            }
+            return resp || { state: "pending" };
+        } finally {
+            this._checking = false;
         }
     }
 

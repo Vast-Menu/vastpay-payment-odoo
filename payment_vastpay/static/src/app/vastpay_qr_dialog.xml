@@ -14,9 +14,17 @@
                 <a t-att-href="props.paymentUrl" target="_blank" class="small">
                     Open payment page
                 </a>
+                <t t-if="state.message">
+                    <small class="text-danger" t-esc="state.message"/>
+                </t>
             </div>
             <t t-set-slot="footer">
                 <button class="btn btn-secondary" t-on-click="cancel">Cancel</button>
+                <button t-if="props.showCheckButton" class="btn btn-primary"
+                        t-att-disabled="state.checking" t-on-click="check">
+                    <t t-if="state.checking">Checking…</t>
+                    <t t-else="">Check payment</t>
+                </button>
             </t>
         </Dialog>
     </t>
