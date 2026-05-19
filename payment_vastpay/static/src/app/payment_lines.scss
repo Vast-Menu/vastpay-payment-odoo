@@ -1,0 +1,15 @@
+// Core `.electronic_status` is single-line (white-space: nowrap) with
+// flex-grow and the default min-width:auto, so it is sized to its
+// longest unbroken content. That is fine for short stock labels but the
+// informative VastPay "still waiting" message then forces the whole
+// payment row to overflow horizontally instead of wrapping. Scope a
+// wrapping override to the VastPay status only; other methods keep the
+// stock single-line/ellipsis behaviour.
+.paymentline .electronic_status.vastpay-payment-status {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    min-width: 0;
+    font-size: 13px;
+    line-height: 1.3;
+}

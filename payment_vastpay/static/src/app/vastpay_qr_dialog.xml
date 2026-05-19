@@ -4,7 +4,10 @@
     <t t-name="payment_vastpay.VastPayQRDialog">
         <Dialog>
             <t t-set-slot="header">
-                <h4 class="modal-title">VastPay Payment</h4>
+                <h4 class="modal-title flex-grow-1">VastPay Payment</h4>
+                <button type="button" class="btn-close" aria-label="Close"
+                        title="Close (does not cancel the payment)"
+                        t-on-click="closeOnly"/>
             </t>
             <div class="d-flex flex-column align-items-center text-center gap-2 p-2">
                 <p class="mb-0">Scan the QR code to pay <strong t-esc="props.amountLabel"/></p>
@@ -19,7 +22,7 @@
                 </t>
             </div>
             <t t-set-slot="footer">
-                <button class="btn btn-secondary" t-on-click="cancel">Cancel</button>
+                <button class="btn btn-secondary" t-on-click="closeOnly">Close</button>
                 <button t-if="props.showCheckButton" class="btn btn-primary"
                         t-att-disabled="state.checking" t-on-click="check">
                     <t t-if="state.checking">Checking…</t>

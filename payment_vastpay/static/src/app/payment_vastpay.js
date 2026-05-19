@@ -180,10 +180,20 @@ export class PaymentVastPay extends PaymentInterface {
      * paths so a resume never re-creates an invoice.
      */
     _startSession({ invoice_id, qr_image, payment_url, amount }) {
-        const line = this.pos.get_order()?.get_selected_paymentline();
+        const order = this.pos.get_order();
+        const line = order?.get_selected_paymentline();
         this.invoiceId = invoice_id;
         if (line) {
             line.transaction_id = invoice_id;
+            // Snapshot the order total this QR was generated for. If the
+            // cashier later adds/removes an item (or changes a qty, price
+            // or discount), the order total no longer matches and the
+            // still-payable QR is stale — it would charge the customer the
+            // wrong amount. The payment-screen reconcile / add-product hook
+            // cancels the invoice at VastPay and drops the line so a fresh
+            // QR is issued for the corrected amount.
+            line.vastpay_order_total_snapshot =
+                order != null ? order.get_total_with_tax() : null;
             line.set_payment_status("waitingCard");
         }
         const amountLabel =
@@ -192,7 +202,7 @@ export class PaymentVastPay extends PaymentInterface {
             qrImage: qr_image,
             amountLabel,
             paymentUrl: payment_url,
-            onCancel: () => this._vastpayCancel(),
+            onClose: () => this._vastpayCloseOnly(),
             onCheck: () => this._manualCheck(),
             // Without a webhook the paid status only arrives via polling;
             // give the cashier an explicit "check now" action.
@@ -377,6 +387,19 @@ export class PaymentVastPay extends PaymentInterface {
 
     _vastpayCancel() {
         this._serverCancel();
+        this._finish(false);
+    }
+
+    /**
+     * Close the QR sheet without cancelling the VastPay invoice. Settles
+     * the in-flight request LOCALLY (stops the poll/timeout, clears the
+     * POS in-progress flag) but deliberately does NOT call _serverCancel:
+     * the customer may still pay and the webhook / session bus listener /
+     * payment-screen reconcile will complete the order. The ONLY path that
+     * cancels at VastPay is deleting the payment line (PaymentScreen
+     * .deletePaymentLine -> vastpay_cancel_payment).
+     */
+    _vastpayCloseOnly() {
         this._finish(false);
     }
 }
