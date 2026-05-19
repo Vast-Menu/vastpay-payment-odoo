@@ -106,7 +106,7 @@ patch(PosStore.prototype, {
      * Single chokepoint for setting/removing the current order's customer
      * (partner list, customer button on the product/payment screen all
      * funnel through here). When the customer is removed, void any pending
-     * VastPay QR that is set to auto-invoice — that QR can no longer be
+     * VastPay payment that is set to auto-invoice — that QR can no longer be
      * invoiced once paid (see _vastpayVoidLinesNeedingPartner).
      */
     setPartnerToCurrentOrder(partner) {
@@ -170,7 +170,7 @@ patch(PosStore.prototype, {
             order,
             stale,
             _t(
-                "The order changed, so the pending VastPay QR was cancelled. " +
+                "The order changed, so the pending VastPay payment was cancelled. " +
                     "Generate a new QR for the updated amount."
             )
         );
@@ -212,7 +212,7 @@ patch(PosStore.prototype, {
             order,
             orphan,
             _t(
-                "The customer was removed, so the pending VastPay QR was " +
+                "The customer was removed, so the pending VastPay payment was " +
                     "cancelled (this payment auto-invoices the order and needs " +
                     "a customer). Select a customer and generate a new QR."
             )
