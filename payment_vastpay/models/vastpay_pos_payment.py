@@ -1,3 +1,4 @@
+import json
 import logging
 
 from odoo import api, fields, models
@@ -90,14 +91,18 @@ class VastPayPosPayment(models.Model):
         ``card_last_four`` — each defaulting to ``''`` so callers can skip
         empty values and avoid wiping previously-recorded data.
 
-        Shape notes (the response is undocumented and has shifted):
-          - ``payment_method`` may be at the top level or on the CAPTURED
-            entry of ``payment_histories``; the captured entry wins when
-            both are present (it's the authoritative one).
-          - Card details live under ``payment_histories[i].payment_payload
-            .card`` (with ``scheme`` and ``last_four``) and only appear
-            when the history's ``payment_method`` is ``'tap'``. Softpos /
-            QR captures don't include a card payload.
+        Shape notes (the response is undocumented and has shifted; the
+        current production shape was confirmed against a live capture):
+          - The captured history entry uses ``event = "CAPTURED"`` to mark
+            the capture and ``gateway`` for the channel ('tap',
+            'softpos…', …). Older responses used ``status``/
+            ``payment_method`` — both are still accepted.
+          - For a ``tap`` capture the card details are inside
+            ``payload`` which is a JSON-encoded string with a top-level
+            ``card`` object carrying ``scheme`` (or ``brand``) and
+            ``last_four``. Some older responses surfaced a parsed
+            ``payment_payload`` dict with the same shape — both paths are
+            tried; softpos / QR captures simply have no card data.
         """
         empty = {
             'payment_method': '',
@@ -122,16 +127,26 @@ class VastPayPosPayment(models.Model):
         for hist in histories:
             if not isinstance(hist, dict):
                 continue
-            if (hist.get('status') or '').upper() != 'CAPTURED':
+            evt = (hist.get('event') or hist.get('status') or '').upper()
+            if evt != 'CAPTURED':
                 continue
-            hist_pm = hist.get('payment_method')
-            if hist_pm:
-                payment_method = str(hist_pm)
+            channel = hist.get('gateway') or hist.get('payment_method')
+            if channel:
+                payment_method = str(channel)
             if (payment_method or '').lower() == 'tap':
                 payload = hist.get('payment_payload')
+                if not isinstance(payload, dict):
+                    raw = hist.get('payload')
+                    if isinstance(raw, str) and raw:
+                        try:
+                            payload = json.loads(raw)
+                        except (ValueError, TypeError):
+                            payload = None
+                    elif isinstance(raw, dict):
+                        payload = raw
                 card = payload.get('card') if isinstance(payload, dict) else None
                 if isinstance(card, dict):
-                    scheme = card.get('scheme') or ''
+                    scheme = card.get('scheme') or card.get('brand') or ''
                     last_four = card.get('last_four') or ''
                     if scheme:
                         card_brand = str(scheme)
