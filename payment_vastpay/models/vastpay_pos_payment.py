@@ -56,6 +56,94 @@ class VastPayPosPayment(models.Model):
         default='draft', required=True, index=True,
     )
     raw_status = fields.Char(string="VastPay Raw Status")
+    vastpay_payment_method = fields.Char(
+        string="VastPay Payment Method",
+        help="Payment method VastPay reports for this invoice (typically "
+             "set when the payment is captured, e.g. a value containing "
+             "'softpos…' or 'qr…'). Forwarded onto the resulting pos.payment "
+             "line for reporting.",
+    )
+    vastpay_card_brand = fields.Char(
+        string="VastPay Card Brand",
+        help="Card scheme reported by VastPay (e.g. 'MASTERCARD', 'VISA'). "
+             "Only populated for 'tap' captures, which include a card "
+             "payload; other VastPay methods don't expose card details.",
+    )
+    vastpay_card_last_four = fields.Char(
+        string="VastPay Card Last 4",
+        help="Last four digits of the card used, reported by VastPay. Only "
+             "populated for 'tap' captures (see vastpay_card_brand).",
+    )
+
+    @staticmethod
+    def _extract_payment_details(data):
+        """Pull payment-method and (for card captures) card scheme + last
+        four digits from a VastPay invoice payload.
+
+        Best-effort: every extracted value is optional. Any missing key,
+        unexpected type, or absent nested structure yields an empty string
+        for that field rather than raising — so a malformed or older-shape
+        VastPay response can never break the sync, and an unrelated
+        capture (no card payload) simply leaves the card fields blank.
+
+        Returns a dict with three keys — ``payment_method``, ``card_brand``,
+        ``card_last_four`` — each defaulting to ``''`` so callers can skip
+        empty values and avoid wiping previously-recorded data.
+
+        Shape notes (the response is undocumented and has shifted):
+          - ``payment_method`` may be at the top level or on the CAPTURED
+            entry of ``payment_histories``; the captured entry wins when
+            both are present (it's the authoritative one).
+          - Card details live under ``payment_histories[i].payment_payload
+            .card`` (with ``scheme`` and ``last_four``) and only appear
+            when the history's ``payment_method`` is ``'tap'``. Softpos /
+            QR captures don't include a card payload.
+        """
+        empty = {
+            'payment_method': '',
+            'card_brand': '',
+            'card_last_four': '',
+        }
+        if not isinstance(data, dict):
+            return empty
+
+        payment_method = ''
+        card_brand = ''
+        card_last_four = ''
+
+        top_pm = data.get('payment_method')
+        if top_pm:
+            payment_method = str(top_pm)
+
+        histories = data.get('payment_histories')
+        if not isinstance(histories, list):
+            histories = []
+
+        for hist in histories:
+            if not isinstance(hist, dict):
+                continue
+            if (hist.get('status') or '').upper() != 'CAPTURED':
+                continue
+            hist_pm = hist.get('payment_method')
+            if hist_pm:
+                payment_method = str(hist_pm)
+            if (payment_method or '').lower() == 'tap':
+                payload = hist.get('payment_payload')
+                card = payload.get('card') if isinstance(payload, dict) else None
+                if isinstance(card, dict):
+                    scheme = card.get('scheme') or ''
+                    last_four = card.get('last_four') or ''
+                    if scheme:
+                        card_brand = str(scheme)
+                    if last_four:
+                        card_last_four = str(last_four)
+            break  # only the first CAPTURED entry is the authoritative one
+
+        return {
+            'payment_method': payment_method,
+            'card_brand': card_brand,
+            'card_last_four': card_last_four,
+        }
 
     @api.model
     def _find_for_notification(self, notification_data):
@@ -116,6 +204,13 @@ class VastPayPosPayment(models.Model):
                 except (TypeError, ValueError):
                     pass
         vals = {'raw_status': raw_status, 'state': new_state}
+        details = self._extract_payment_details(data)
+        if details['payment_method']:
+            vals['vastpay_payment_method'] = details['payment_method']
+        if details['card_brand']:
+            vals['vastpay_card_brand'] = details['card_brand']
+        if details['card_last_four']:
+            vals['vastpay_card_last_four'] = details['card_last_four']
         if captured:
             vals['amount'] = captured
         elif data.get('total') is not None:
@@ -187,6 +282,31 @@ class VastPayPosPayment(models.Model):
                 "cashier will validate from POS.", self.vastpay_invoice_id,
             )
             return
+
+        # Stamp the VastPay metadata onto the matching pos.payment line so
+        # the order's payment details show how the customer actually paid:
+        #   - vastpay_payment_method: raw VastPay channel (e.g. 'softpos…',
+        #     'qr…', 'tap'); drives the QR/SoftPOS classification.
+        #   - card_brand / card_no: Odoo's native card scheme / last-four
+        #     fields, populated only for 'tap' captures where VastPay
+        #     returns a card payload. Using the native fields makes the
+        #     existing form rows light up automatically.
+        # Match by VastPay invoice id stored on transaction_id when the line
+        # was created. Each write is gated on a non-empty value so we never
+        # wipe previously-recorded data on a re-sync.
+        line_vals = {}
+        if self.vastpay_payment_method:
+            line_vals['vastpay_payment_method'] = self.vastpay_payment_method
+        if self.vastpay_card_brand:
+            line_vals['card_brand'] = self.vastpay_card_brand
+        if self.vastpay_card_last_four:
+            line_vals['card_no'] = self.vastpay_card_last_four
+        if line_vals:
+            lines = order.payment_ids.filtered(
+                lambda p: p.transaction_id == self.vastpay_invoice_id
+            )
+            if lines:
+                lines.write(line_vals)
 
         if provider.vastpay_auto_validate_order:
             self._validate_pos_order(order)

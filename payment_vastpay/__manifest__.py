@@ -52,6 +52,7 @@ https://documenter.getpostman.com/view/50697047/2sBXiesu8J
         'security/ir.model.access.csv',
         'views/payment_provider_views.xml',
         'views/pos_payment_method_views.xml',
+        'views/pos_payment_views.xml',
         'views/pos_config_views.xml',
         'data/payment_provider_data.xml',
     ],
