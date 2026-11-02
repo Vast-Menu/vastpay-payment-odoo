@@ -213,7 +213,7 @@ class VastPayPosPayment(models.Model):
 
         captured = 0.0
         for hist in data.get('payment_histories') or []:
-            if (hist.get('status') or '').upper() == 'CAPTURED':
+            if (hist.get('event') or hist.get('status') or '').upper() == 'CAPTURED':
                 try:
                     captured += float(hist.get('amount') or 0.0)
                 except (TypeError, ValueError):
