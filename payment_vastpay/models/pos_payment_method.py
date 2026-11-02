@@ -236,7 +236,6 @@ class PosPaymentMethod(models.Model):
         # provider setting, not the value cached when the POS session opened.
         return {
             'state': state,
-            'amount': tracking.amount,
             'auto_validate': tracking.provider_id.vastpay_auto_validate_order,
         }
 
@@ -266,7 +265,6 @@ class PosPaymentMethod(models.Model):
             state = tracking.state
         result = {
             'state': state,
-            'amount': tracking.amount,
             'auto_validate': tracking.provider_id.vastpay_auto_validate_order,
         }
         # Still resumable (not paid, not cancelled/expired): hand back the

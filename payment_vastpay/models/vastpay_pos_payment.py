@@ -211,13 +211,10 @@ class VastPayPosPayment(models.Model):
         raw_status = (data.get('status') or '').lower()
         new_state = _STATUS_MAP.get(raw_status, 'pending')
 
-        captured = 0.0
-        for hist in data.get('payment_histories') or []:
-            if (hist.get('status') or '').upper() == 'CAPTURED':
-                try:
-                    captured += float(hist.get('amount') or 0.0)
-                except (TypeError, ValueError):
-                    pass
+        # `amount` is deliberately never synced: it stays the amount Odoo
+        # requested. VastPay is a payment method; what it charges the card
+        # (e.g. total_after_cashback) is its own business and must not
+        # change the POS payment line.
         vals = {'raw_status': raw_status, 'state': new_state}
         details = self._extract_payment_details(data)
         if details['payment_method']:
@@ -226,13 +223,6 @@ class VastPayPosPayment(models.Model):
             vals['vastpay_card_brand'] = details['card_brand']
         if details['card_last_four']:
             vals['vastpay_card_last_four'] = details['card_last_four']
-        if captured:
-            vals['amount'] = captured
-        elif data.get('total') is not None:
-            try:
-                vals['amount'] = float(data['total'])
-            except (TypeError, ValueError):
-                pass
         self.write(vals)
 
         if new_state == 'paid':

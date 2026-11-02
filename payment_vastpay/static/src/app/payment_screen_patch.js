@@ -84,9 +84,6 @@ patch(PaymentScreen.prototype, {
                     continue;
                 }
                 if (resp && resp.state === "paid") {
-                    if (resp.amount) {
-                        line.set_amount(resp.amount);
-                    }
                     line.set_payment_status("done");
                 } else {
                     line.set_payment_status("retry");
