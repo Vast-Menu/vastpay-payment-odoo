@@ -1,10 +1,10 @@
-# VastPay POS Payment for Odoo 19
+# VastPay POS Payment for Odoo 20
 
-Accept **Point of Sale** payments in Odoo 19 through **VastPay** — the customer
+Accept **Point of Sale** payments in Odoo 20 through **VastPay** — the customer
 scans a QR code at the till, pays on the VastPay PWA / App Clip, and VastPay
 confirms the payment back to Odoo via webhook.
 
-- **Version:** 19.0.1.0.0
+- **Version:** 20.0.1.0.0
 - **License:** LGPL-3
 - **Category:** Point of Sale
 - **Author:** [Vast Group](https://vast-pay.com)
@@ -26,7 +26,8 @@ confirms the payment back to Odoo via webhook.
 - **Opt-in order closing** — by default a paid webhook records the payment and
   amount but leaves the POS order open for the cashier to validate. Two
   independent provider flags can enable automatic validation and invoicing.
-- **Test / Live environments** via the standard Odoo provider state, plus a
+- **Test / Staging / Live environments** via the provider's **Live** toggle
+  and a **Use VastPay Staging** switch, plus a
   selectable **PWA version** (`pwa` or `pwa-v2` preview).
 - **SAR / Saudi Arabia only** — enforced in the UI and by a model constraint.
 - **Test Connection** and **Register Webhook** buttons in the provider form.
@@ -70,13 +71,13 @@ branch). It is reused for every payment taken at that stand.
 
 ## Installation
 
-> **Odoo version:** this is the **Odoo 19** release (`19.0.x`). Branches are
+> **Odoo version:** this is the **Odoo 20** release (`20.0.x`). Branches are
 > named after the Odoo series — use the `18.0` branch for Odoo 18.
 > Available on **Odoo.sh** and **On Premise**; **not** on Odoo Online (SaaS).
 
 1. Get the module:
-   - **Odoo Apps store** — download *VastPay POS Payment* for **v19**, or
-   - **Git** — clone this repository and check out the `19.0` branch.
+   - **Odoo Apps store** — download *VastPay POS Payment* for **v20**, or
+   - **Git** — clone this repository and check out the `20.0` branch.
 2. Place the `payment_vastpay/` folder in your Odoo **addons path** (or deploy
    the repository on **Odoo.sh**).
 3. Restart Odoo, enable **Developer Mode**, then **Apps → Update Apps List**.
@@ -89,15 +90,18 @@ branch). It is reused for every payment taken at that stand.
 
 ## Configuration
 
-1. Install **VastPay POS Payment**. The provider ships in **Test Mode** by
+1. Install **VastPay POS Payment**. The provider ships with **Live** off (Test) by
    default (no credentials yet), so it is **hidden in the POS** until you
    enter the API credentials below.
 2. **Accounting → Payment Providers → VastPay**:
    - Enter **Client ID** / **Client Secret** (system-group only, masked).
      VastPay appears in the POS only once **both** are set.
    - Choose **PWA Version** (Default `pwa`, or `v2`/preview `pwa-v2`).
-   - Keep state **Test Mode** (uses `*-staging.vast-pay.com`) or set
-     **Enabled** (production). **Disabled** hides VastPay in the POS.
+   - Keep **Live** off for Test (uses `*-staging.vast-pay.com`, webhook via
+     the local cloudflared tunnel), turn on **Use VastPay Staging** to keep the
+     staging API but register the public `web.base.url` webhook, or turn
+     **Live** on (production). Archiving the provider hides VastPay in the POS
+     and disables the webhook.
    - Click **Test Connection**, then **Register Webhook** (registers
      `{web.base.url}/payment/vastpay/webhook`; ensure `web.base.url` is publicly
      reachable).
@@ -120,12 +124,12 @@ branch). It is reused for every payment taken at that stand.
 
 ## Environments
 
-| Provider state | PWA Version | API base (& webhook) | QR / PWA target |
+| Environment | PWA Version | API base (& webhook) | QR / PWA target |
 |---|---|---|---|
-| Test Mode | Default | `api-staging.vast-pay.com` | `pwa-staging.vast-pay.com` |
-| Test Mode | v2 | `api-staging.vast-pay.com` | `pwa-v2-staging.vast-pay.com` |
-| Enabled (Live) | Default | `api.vast-pay.com` | `pwa.vast-pay.com` |
-| Enabled (Live) | v2 | `api.vast-pay.com` | `pwa-v2.vast-pay.com` |
+| Test / Staging | Default | `api-staging.vast-pay.com` | `pwa-staging.vast-pay.com` |
+| Test / Staging | v2 | `api-staging.vast-pay.com` | `pwa-v2-staging.vast-pay.com` |
+| Live | Default | `api.vast-pay.com` | `pwa.vast-pay.com` |
+| Live | v2 | `api.vast-pay.com` | `pwa-v2.vast-pay.com` |
 
 ### VastPay API endpoints used
 
@@ -152,8 +156,8 @@ branch). It is reused for every payment taken at that stand.
 - **`payment.provider`** (extended) — VastPay credentials, API client, the two
   auto-close flags, `vastpay_pwa_version`, SAR/Saudi-Arabia constraint, and the
   Test Connection / Register Webhook actions.
-- **`pos.payment.method`** (extended) — adds `vastpay` to the payment-terminal
-  selection, links the VastPay provider, ships the brand logo, and exposes the
+- **`pos.payment.method`** (extended) — adds `vastpay` as a *Quick Pay (QR Code)*
+  payment provider, links the VastPay provider, ships the brand logo, and exposes the
   RPC endpoints used by the POS frontend (`vastpay_make_payment`,
   `vastpay_poll_status`, `vastpay_cancel_payment`).
 - **`pos.config`** (extended) — `vastpay_table_id` (the QR-stand identifier).
@@ -171,7 +175,7 @@ follows the provider flag rather than the global POS setting.
 A Docker Compose stack is included for local testing:
 
 ```bash
-docker compose up -d                 # Postgres 16 + Odoo 19 + cloudflared tunnel
+docker compose up -d                 # Postgres 16 + Odoo 20 + cloudflared tunnel
 docker compose run --rm odoo odoo -i payment_vastpay -d vastpay --stop-after-init
 docker compose logs tunnel           # public HTTPS URL for the webhook
 ```
@@ -183,6 +187,6 @@ webhook. The VastPay sandbox is available 10:00–22:00 on weekdays.
 
 ## Requirements
 
-- **Odoo 19.0** with **Point of Sale** and **Payment** apps.
+- **Odoo 20.0** with **Point of Sale** and **Payment** apps.
 - Python `requests` and `qrcode` (both ship with Odoo).
 - A **VastPay merchant account** — [vast-pay.com](https://vast-pay.com).

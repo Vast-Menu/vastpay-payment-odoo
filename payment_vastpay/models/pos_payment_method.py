@@ -6,8 +6,8 @@ import qrcode
 
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
-from odoo.osv import expression
-from odoo.tools import file_open
+from odoo.fields import Domain
+from odoo.tools import BinaryBytes, file_open
 
 _logger = logging.getLogger(__name__)
 
@@ -15,8 +15,8 @@ _logger = logging.getLogger(__name__)
 class PosPaymentMethod(models.Model):
     _inherit = 'pos.payment.method'
 
-    def _get_payment_terminal_selection(self):
-        return super()._get_payment_terminal_selection() + [('vastpay', 'VastPay')]
+    def _get_external_qr_provider_selection(self):
+        return super()._get_external_qr_provider_selection() + [('vastpay', 'VastPay')]
 
     vastpay_provider_id = fields.Many2one(
         'payment.provider',
@@ -34,14 +34,14 @@ class PosPaymentMethod(models.Model):
     )
 
     @api.model
-    def _load_pos_data_domain(self, data, config):
+    def _load_pos_data_domain(self, data):
         # Don't load the VastPay method into the POS unless it can actually
         # take payments: the linked provider must exist, not be Disabled,
         # and have both API credentials set. Otherwise the cashier would
         # see a VastPay option that fails on use.
-        domain = super()._load_pos_data_domain(data, config)
+        domain = super()._load_pos_data_domain(data)
         vastpay_methods = self.sudo().search(
-            [('use_payment_terminal', '=', 'vastpay')]
+            [('payment_provider', '=', 'vastpay')]
         )
         if not vastpay_methods:
             return domain
@@ -52,12 +52,12 @@ class PosPaymentMethod(models.Model):
         for m in vastpay_methods:
             provider = (m.vastpay_provider_id or fallback).sudo()
             if (not provider
-                    or provider.state == 'disabled'
+                    or not provider.active
                     or not provider.vastpay_client_id
                     or not provider.vastpay_client_secret):
                 hidden_ids.append(m.id)
         if hidden_ids:
-            domain = expression.AND([[('id', 'not in', hidden_ids)], domain])
+            domain = Domain.AND([[('id', 'not in', hidden_ids)], domain])
         return domain
 
     @api.model
@@ -79,22 +79,18 @@ class PosPaymentMethod(models.Model):
             with file_open(
                 'payment_vastpay/static/src/img/vastpay_icon.png', 'rb'
             ) as fh:
-                return base64.b64encode(fh.read())
+                return BinaryBytes(fh.read())
         except OSError:
             return False
 
-    @api.onchange('use_payment_terminal')
-    def _onchange_vastpay_brand_image(self):
-        if self.use_payment_terminal == 'vastpay' and not self.image:
-            self.image = self._vastpay_brand_image()
-
-    @api.model_create_multi
-    def create(self, vals_list):
-        records = super().create(vals_list)
-        for rec in records:
-            if rec.use_payment_terminal == 'vastpay' and not rec.image:
+    @api.depends('payment_provider', 'custom_image')
+    def _compute_image(self):
+        # Core looks for point_of_sale/static/img/providers/<code>.png, which
+        # VastPay doesn't ship; fall back to the module logo.
+        super()._compute_image()
+        for rec in self:
+            if rec.payment_provider == 'vastpay' and not rec.custom_image:
                 rec.image = self._vastpay_brand_image()
-        return records
 
     # --- Helpers ---
 

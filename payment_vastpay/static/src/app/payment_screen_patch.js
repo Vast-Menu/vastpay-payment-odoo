@@ -47,7 +47,7 @@ patch(PaymentScreen.prototype, {
             const lines = (order && order.payment_ids) || [];
             for (const line of lines) {
                 const pm = line.payment_method_id;
-                if (pm?.use_payment_terminal !== "vastpay") {
+                if (pm?.payment_provider !== "vastpay") {
                     continue;
                 }
                 const status = line.getPaymentStatus?.();
@@ -58,7 +58,7 @@ patch(PaymentScreen.prototype, {
                 if (!["waiting", "waitingCard", "retry", "pending"].includes(status)) {
                     continue;
                 }
-                const term = pm.payment_terminal;
+                const term = pm.payment_interface;
                 // An in-flight request (dialog open) handles itself.
                 if (term && term._settled === false) {
                     continue;
@@ -111,7 +111,7 @@ patch(PaymentScreen.prototype, {
     deletePaymentLine(uuid) {
         const line = this.paymentLines.find((l) => l.uuid === uuid);
         const pm = line?.payment_method_id;
-        if (pm?.use_payment_terminal === "vastpay" && line.transaction_id) {
+        if (pm?.payment_provider === "vastpay" && line.transaction_id) {
             const status = line.getPaymentStatus?.();
             const nativeCancels = ["waiting", "waitingCard", "timeout"].includes(
                 status
@@ -130,7 +130,7 @@ patch(PaymentScreen.prototype, {
 
     /**
      * Odoo POS auto-validates terminal payments whenever
-     * `pos.config.auto_validate_terminal_payment` is set (it defaults to
+     * `pos.config.auto_validate_electronic_payment` is set (it defaults to
      * True). For VastPay the order must be auto-closed ONLY when the
      * provider flag "Auto-validate POS order on payment" is enabled,
      * regardless of that global POS setting. We scope the global flag to
@@ -139,7 +139,7 @@ patch(PaymentScreen.prototype, {
      */
     async sendPaymentRequest(line) {
         const pm = line?.payment_method_id;
-        if (pm?.use_payment_terminal !== "vastpay") {
+        if (pm?.payment_provider !== "vastpay") {
             return super.sendPaymentRequest(...arguments);
         }
         // Auto-invoicing a paid POS order needs a customer (the invoice
@@ -163,12 +163,12 @@ patch(PaymentScreen.prototype, {
             return false;
         }
         const cfg = this.pos.config;
-        const original = cfg.auto_validate_terminal_payment;
-        cfg.auto_validate_terminal_payment = !!pm.vastpay_auto_validate_order;
+        const original = cfg.auto_validate_electronic_payment;
+        cfg.auto_validate_electronic_payment = !!pm.vastpay_auto_validate_order;
         try {
             return await super.sendPaymentRequest(...arguments);
         } finally {
-            cfg.auto_validate_terminal_payment = original;
+            cfg.auto_validate_electronic_payment = original;
         }
     },
 });

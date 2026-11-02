@@ -63,15 +63,15 @@ export class PaymentVastPay extends PaymentInterface {
         this._poll();
     }
 
-    sendPaymentRequest(uuid) {
-        super.sendPaymentRequest(uuid);
+    async sendPaymentRequest(line) {
+        await super.sendPaymentRequest(line);
         return this._vastpayPay();
     }
 
-    sendPaymentCancel(order, uuid) {
-        super.sendPaymentCancel(order, uuid);
+    async sendPaymentCancel(line) {
+        await super.sendPaymentCancel(line);
         this._vastpayCancel();
-        return Promise.resolve(true);
+        return true;
     }
 
     close() {
@@ -153,11 +153,11 @@ export class PaymentVastPay extends PaymentInterface {
         this._cleanup();
         // The parent PaymentScreen.sendPaymentRequest auto-validates the
         // order right after this promise resolves, gated on
-        // pos.config.auto_validate_terminal_payment. Set it to the live
+        // pos.config.auto_validate_electronic_payment. Set it to the live
         // VastPay flag so a disabled flag is honoured even if the POS cached
         // a stale (enabled) value at session start.
         if (success) {
-            this.pos.config.auto_validate_terminal_payment =
+            this.pos.config.auto_validate_electronic_payment =
                 this._liveAutoValidate();
         }
         const line = this._line();

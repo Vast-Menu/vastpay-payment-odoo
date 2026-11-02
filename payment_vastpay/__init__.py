@@ -22,13 +22,14 @@ def _post_init_hook(env):
     )
     PaymentMethod = env['pos.payment.method']
     method = PaymentMethod.search(
-        [('use_payment_terminal', '=', 'vastpay')], limit=1,
+        [('payment_provider', '=', 'vastpay')], limit=1,
     )
     if not method:
         method = PaymentMethod.create({
             'name': 'VastPay',
-            'payment_method_type': 'terminal',
-            'use_payment_terminal': 'vastpay',
+            'type': 'bank',
+            'payment_method_type': 'external_qr',
+            'payment_provider': 'vastpay',
             'company_id': env.company.id,
             'journal_id': bank_journal.id if bank_journal else False,
             'vastpay_provider_id': provider.id if provider else False,
@@ -50,6 +51,4 @@ def _uninstall_hook(env):
         [('code', '=', 'vastpay')]
     )
     if vastpay_provider:
-        vastpay_provider.write({
-            'state': 'disabled',
-        })
+        vastpay_provider.write({'is_live': False, 'active': False})

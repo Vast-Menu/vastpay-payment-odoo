@@ -50,13 +50,13 @@ patch(PosStore.prototype, {
         for (const order of orders) {
             for (const line of order.payment_ids || []) {
                 const pm = line.payment_method_id;
-                if (pm?.use_payment_terminal !== "vastpay") {
+                if (pm?.payment_provider !== "vastpay") {
                     continue;
                 }
                 if (line.transaction_id !== invoiceId) {
                     continue;
                 }
-                const term = pm.payment_terminal;
+                const term = pm.payment_interface;
                 if (term && term._settled === false) {
                     continue;
                 }
@@ -143,7 +143,7 @@ patch(PosStore.prototype, {
         const stale = [];
         for (const line of order.payment_ids || []) {
             const pm = line.payment_method_id;
-            if (pm?.use_payment_terminal !== "vastpay") {
+            if (pm?.payment_provider !== "vastpay") {
                 continue;
             }
             if (!line.transaction_id) {
@@ -191,7 +191,7 @@ patch(PosStore.prototype, {
         const orphan = [];
         for (const line of order.payment_ids || []) {
             const pm = line.payment_method_id;
-            if (pm?.use_payment_terminal !== "vastpay") {
+            if (pm?.payment_provider !== "vastpay") {
                 continue;
             }
             if (!pm.vastpay_auto_invoice) {
@@ -231,7 +231,7 @@ patch(PosStore.prototype, {
         }
         for (const line of lines) {
             const pm = line.payment_method_id;
-            const term = pm?.payment_terminal;
+            const term = pm?.payment_interface;
             if (
                 term &&
                 term._settled === false &&

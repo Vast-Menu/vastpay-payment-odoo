@@ -1,4 +1,4 @@
-import { register_payment_method } from "@point_of_sale/app/services/pos_store";
+import { registry } from "@web/core/registry";
 import { PaymentVastPay } from "@payment_vastpay/app/payment_vastpay";
 
-register_payment_method("vastpay", PaymentVastPay);
+registry.category("pos_payment_providers").add("vastpay", PaymentVastPay);

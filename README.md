@@ -8,7 +8,8 @@ version series.
 
 | Branch | Odoo version | Status     |
 |--------|--------------|------------|
-| `19.0` | Odoo 19      | Current    |
+| `20.0` | Odoo 20      | Current    |
+| `19.0` | Odoo 19      | Maintained |
 | `18.0` | Odoo 18      | Maintained |
 
 See [`payment_vastpay/README.md`](payment_vastpay/README.md) for module
@@ -16,7 +17,7 @@ documentation, configuration, and the VastPay API reference.
 
 ## Local testing
 
-A Docker Compose stack (Postgres 16 + Odoo 19 + a cloudflared tunnel for
+A Docker Compose stack (Postgres 16 + Odoo 20 + a cloudflared tunnel for
 inbound webhooks) is included:
 
 ```bash

@@ -6,10 +6,10 @@
         <field name="model">pos.payment.method</field>
         <field name="inherit_id" ref="point_of_sale.pos_payment_method_view_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//field[@name='use_payment_terminal']" position="after">
+            <xpath expr="//field[@name='payment_provider']" position="after">
                 <field name="vastpay_provider_id"
-                       invisible="use_payment_terminal != 'vastpay'"
-                       required="use_payment_terminal == 'vastpay'"/>
+                       invisible="payment_provider != 'vastpay'"
+                       required="payment_provider == 'vastpay'"/>
             </xpath>
         </field>
     </record>

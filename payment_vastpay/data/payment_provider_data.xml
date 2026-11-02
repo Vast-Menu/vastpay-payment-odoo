@@ -6,12 +6,12 @@
     <record id="payment_provider_vastpay" model="payment.provider">
         <field name="name">VastPay</field>
         <field name="code">vastpay</field>
-        <field name="state">test</field>
+        <field name="is_live">False</field>
         <field name="is_published">False</field>
         <field name="vastpay_auto_validate_order" eval="False"/>
         <field name="vastpay_auto_invoice" eval="False"/>
         <field name="available_country_ids" eval="[(6, 0, [ref('base.sa')])]"/>
-        <field name="image_128" type="base64"
+        <field name="image_128" type="bytes"
                file="payment_vastpay/static/src/img/vastpay_icon.png"/>
     </record>
 

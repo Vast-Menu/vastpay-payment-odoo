@@ -19,6 +19,7 @@
                     <field name="vastpay_client_secret"
                            password="True"/>
                     <field name="vastpay_webhook_registered" readonly="1"/>
+                    <field name="vastpay_staging" invisible="is_live"/>
                     <field name="vastpay_pwa_version"/>
                     <field name="vastpay_auto_validate_order"/>
                     <field name="vastpay_auto_invoice"

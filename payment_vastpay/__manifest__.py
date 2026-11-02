@@ -1,10 +1,10 @@
 {
     'name': 'VastPay POS Payment',
-    'version': '19.0.1.0.0',
+    'version': '20.0.1.0.0',
     'category': 'Point of Sale',
     'summary': 'Accept POS payments via VastPay (SAR, Saudi Arabia)',
     'description': """
-VastPay POS Payment for Odoo 19
+VastPay POS Payment for Odoo 20
 ===============================
 
 Adds VastPay as a Point of Sale payment method for Saudi Arabia (SAR).
@@ -28,9 +28,9 @@ Supports Test / Live environments and a selectable PWA version
 Installation
 ------------
 
-- This is the Odoo 19 release (19.0.x). Use the 18.0 branch for Odoo 18.
+- This is the Odoo 20 release (20.0.x). Use the 19.0 or 18.0 branch for older Odoo.
 - Available on Odoo.sh and On Premise. Not available on Odoo Online (SaaS).
-- Get the module from the Odoo Apps store (v19) or clone the 19.0 branch.
+- Get the module from the Odoo Apps store (v20) or clone the 20.0 branch.
 - Place the payment_vastpay folder in your Odoo addons path, or deploy the
   repository on Odoo.sh.
 - Restart Odoo, enable Developer Mode, then Apps and Update Apps List.
@@ -49,7 +49,7 @@ https://documenter.getpostman.com/view/50697047/2sBXiesu8J
     'license': 'LGPL-3',
     'depends': ['point_of_sale', 'payment'],
     'data': [
-        'security/ir.model.access.csv',
+        'security/ir.access.csv',
         'views/payment_provider_views.xml',
         'views/pos_payment_method_views.xml',
         'views/pos_payment_views.xml',

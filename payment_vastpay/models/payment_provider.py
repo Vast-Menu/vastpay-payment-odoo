@@ -36,12 +36,15 @@ class PaymentProvider(models.Model):
         selection_add=[('vastpay', 'VastPay')],
         ondelete={'vastpay': 'set default'},
     )
-    # Odoo core ships disabled / enabled / test. Add a Staging tier:
-    # behaves like Live (real public webhook domain) but talks to the
-    # VastPay -staging API/PWA endpoints.
-    state = fields.Selection(
-        selection_add=[('staging', "Staging")],
-        ondelete={'staging': 'set default'},
+    # Odoo 20 replaced the provider `state` selection with `is_live` +
+    # `active`. VastPay keeps its four environments (see _vastpay_state):
+    # Staging behaves like Live (real public webhook domain) but talks to
+    # the VastPay -staging API/PWA endpoints.
+    vastpay_staging = fields.Boolean(
+        string="Use VastPay Staging",
+        help="Only applies when Live is off. Off: Test mode (local "
+             "cloudflared tunnel webhook). On: Staging (public web.base.url "
+             "webhook). Both use the VastPay -staging API and PWA.",
     )
     # Credentials are intentionally NOT required_if_provider: the provider
     # ships in Test Mode without credentials. VastPay is simply hidden from
@@ -89,10 +92,19 @@ class PaymentProvider(models.Model):
 
     # --- Helpers ---
 
+    def _vastpay_state(self):
+        """Odoo <= 19 style environment key: disabled/test/staging/enabled."""
+        self.ensure_one()
+        if not self.active:
+            return 'disabled'
+        if self.is_live:
+            return 'enabled'
+        return 'staging' if self.vastpay_staging else 'test'
+
     def _vastpay_get_base_url(self):
         """Return the VastPay API base URL for the current environment."""
         self.ensure_one()
-        return VASTPAY_BASE_URLS.get(self.state, VASTPAY_BASE_URLS['test'])
+        return VASTPAY_BASE_URLS.get(self._vastpay_state(), VASTPAY_BASE_URLS['test'])
 
     def _vastpay_get_payment_url(self):
         """Return the VastPay PWA base URL for the current environment.
@@ -103,7 +115,7 @@ class PaymentProvider(models.Model):
         """
         self.ensure_one()
         prefix = VASTPAY_PWA_PREFIXES.get(self.vastpay_pwa_version, 'pwa')
-        suffix = '' if self.state == 'enabled' else '-staging'
+        suffix = '' if self._vastpay_state() == 'enabled' else '-staging'
         return f'https://{prefix}{suffix}.vast-pay.com'
 
     def _vastpay_get_tunnel_base_url(self):
@@ -134,13 +146,11 @@ class PaymentProvider(models.Model):
         - disabled: empty string (disables the webhook on VastPay).
         """
         self.ensure_one()
-        if self.state == 'disabled':
+        state = self._vastpay_state()
+        if state == 'disabled':
             return ''
-        config_url = (
-            self.env['ir.config_parameter'].sudo().get_param('web.base.url')
-            or ''
-        ).rstrip('/')
-        if self.state == 'test':
+        config_url = (self.get_base_url() or '').rstrip('/')
+        if state == 'test':
             return self._vastpay_get_tunnel_base_url() or config_url
         return config_url
 
@@ -406,7 +416,7 @@ class PaymentProvider(models.Model):
     # --- Overrides ---
 
     def write(self, vals):
-        """Keep the VastPay-side webhook in sync when State changes.
+        """Keep the VastPay-side webhook in sync when the environment changes.
 
         Switching to Disabled disables the webhook on VastPay; switching to
         Test/Staging/Live re-registers it at the URL resolved for that mode.
@@ -414,13 +424,14 @@ class PaymentProvider(models.Model):
         and POS status-polling still confirms payments regardless.
         """
         res = super().write(vals)
-        if 'state' not in vals or self.env.context.get('vastpay_skip_webhook_sync'):
+        if not {'active', 'is_live', 'vastpay_staging'} & vals.keys() or \
+                self.env.context.get('vastpay_skip_webhook_sync'):
             return res
         for provider in self:
             if provider.code != 'vastpay':
                 continue
             psudo = provider.sudo()
-            target_state = vals['state']
+            target_state = psudo._vastpay_state()
             # No credentials yet -> nothing we can call on VastPay.
             if target_state != 'disabled' and not (
                 psudo.vastpay_client_id and psudo.vastpay_client_secret
