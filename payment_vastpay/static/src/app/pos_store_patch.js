@@ -74,9 +74,6 @@ patch(PosStore.prototype, {
                     continue;
                 }
                 if (resp && resp.state === "paid") {
-                    if (resp.amount) {
-                        line.setAmount(resp.amount);
-                    }
                     line.setPaymentStatus("done");
                 } else if (resp && resp.state === "cancelled") {
                     line.setPaymentStatus("retry");
